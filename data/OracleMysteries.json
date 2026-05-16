@@ -1,0 +1,679 @@
+[
+    {
+        "Name": "Ancestor",
+        "Deities": [
+            "Erastil",
+            "Irori",
+            "Pharasma"
+        ],
+        "Spells": {
+            "Level 2": "unseen servant",
+            "Level 4": "spiritual weapon",
+            "Level 6": "heroism",
+            "Level 8": "spiritual ally",
+            "Level 10": "telekinesis",
+            "Level 12": "heroism, greater",
+            "Level 14": "ethereal jaunt",
+            "Level 16": "vision",
+            "Level 18": "astral projection"
+        }
+    },
+    {
+        "Name": "Apocalypse",
+        "Deities": [
+            "Gorum",
+            "Rovagug"
+        ],
+        "Spells": {
+            "Level 2": "deathwatch",
+            "Level 4": "summon swarm",
+            "Level 6": "explosive runes",
+            "Level 8": "ice storm",
+            "Level 10": "insect plague",
+            "Level 12": "circle of death",
+            "Level 14": "vision",
+            "Level 16": "incendiary cloud",
+            "Level 18": "meteor swarm"
+        }
+    },
+    {
+        "Name": "Ascetic",
+        "Deities": [
+            "Gozreh",
+            "Irori"
+        ],
+        "Spells": {
+            "Level 2": "stone fist",
+            "Level 4": "glide",
+            "Level 6": "force punch",
+            "Level 8": "ethereal fists",
+            "Level 10": "contact other plane",
+            "Level 12": "legend lore",
+            "Level 14": "vision",
+            "Level 16": "frightful aspect",
+            "Level 18": "iron body"
+        }
+    },
+    {
+        "Name": "Battle",
+        "Deities": [
+            "Cayden Cailean",
+            "Gorum",
+            "Iomedae",
+            "Rovagug"
+        ],
+        "Spells": {
+            "Level 2": "enlarge person",
+            "Level 4": "fog cloud",
+            "Level 6": "magic vestment",
+            "Level 8": "wall of fire",
+            "Level 10": "righteous might",
+            "Level 12": "bull's strength, mass",
+            "Level 14": "control weather",
+            "Level 16": "earthquake",
+            "Level 18": "storm of vengeance"
+        }
+    },
+    {
+        "Name": "Bones",
+        "Deities": [
+            "Norgorber",
+            "Pharasma",
+            "Urgathoa"
+        ],
+        "Spells": {
+            "Level 2": "cause fear",
+            "Level 4": "false life",
+            "Level 6": "animate dead",
+            "Level 8": "fear",
+            "Level 10": "slay living",
+            "Level 12": "circle of death",
+            "Level 14": "control undead",
+            "Level 16": "horrid wilting",
+            "Level 18": "wail of the banshee"
+        }
+    },
+    {
+        "Name": "Dark Tapestry",
+        "Deities": [
+            "Lamashtu",
+            "Norgorber",
+            "Zon-Kuthon"
+        ],
+        "Spells": {
+            "Level 2": "entropic shield",
+            "Level 4": "dust of twilight",
+            "Level 6": "tongues",
+            "Level 8": "black tentacles",
+            "Level 10": "feeblemind",
+            "Level 12": "planar binding",
+            "Level 14": "insanity",
+            "Level 16": "reverse gravity",
+            "Level 18": "interplanetary teleport"
+        }
+    },
+    {
+        "Name": "Dragon",
+        "Deities": [
+            "Dahak",
+            "General Susumu",
+            "Nalinivati",
+            "Ragadahn",
+            "Shizuru"
+        ],
+        "Spells": {
+            "Level 2": "cause fear",
+            "Level 4": "resist energy",
+            "Level 6": "fly",
+            "Level 8": "fear",
+            "Level 10": "spell resistance",
+            "Level 12": "antimagic field",
+            "Level 14": "true seeing",
+            "Level 16": "form of the dragon III",
+            "Level 18": "overwhelming presence"
+        }
+    },
+    {
+        "Name": "Elemental",
+        "Deities": [
+            "Elemental Lords",
+            "Gozreh",
+            "Nethys",
+            "Yamatsumi"
+        ],
+        "Spells": {
+            "Level 2": "Endure elements",
+            "Level 4": "resist energy",
+            "Level 6": "elemental aura",
+            "Level 8": "elemental body I",
+            "Level 10": "elemental body II",
+            "Level 12": "elemental body III",
+            "Level 14": "elemental body IV",
+            "Level 16": "create demiplane",
+            "Level 18": "elemental swarm"
+        }
+    },
+    {
+        "Name": "Flame",
+        "Deities": [
+            "Asmodeus",
+            "Sarenrae"
+        ],
+        "Spells": {
+            "Level 2": "burning hands",
+            "Level 4": "resist energy",
+            "Level 6": "fireball",
+            "Level 8": "wall of fire",
+            "Level 10": [
+                "summon monster 5",
+                "fire elementals only"
+            ],
+            "Level 12": "fire seeds",
+            "Level 14": "fire storm",
+            "Level 16": "incendiary cloud",
+            "Level 18": "fiery body"
+        }
+    },
+    {
+        "Name": "Godclaw",
+        "Deities": [
+            "Abadar",
+            "Asmodeus",
+            "Iomedae",
+            "Irori",
+            "Torag"
+        ],
+        "Spells": {
+            "Level 2": "cause fear",
+            "Level 4": "daze monster",
+            "Level 6": "hold person",
+            "Level 8": "order's wrath",
+            "Level 10": "break enchantment",
+            "Level 12": "forceful hand",
+            "Level 14": "dictum",
+            "Level 16": "shield of law",
+            "Level 18": "imprisonment"
+        }
+    },
+    {
+        "Name": "Heavens",
+        "Deities": [
+            "Desna",
+            "Gozreh",
+            "Pharasma",
+            "Sarenrae"
+        ],
+        "Spells": {
+            "Level 2": "color spray",
+            "Level 4": "hypnotic pattern",
+            "Level 6": "daylight",
+            "Level 8": "rainbow pattern",
+            "Level 10": "overland flight",
+            "Level 12": "chain lightning",
+            "Level 14": "prismatic spray",
+            "Level 16": "sunburst",
+            "Level 18": "meteor swarm"
+        }
+    },
+    {
+        "Name": "Intrigue",
+        "Deities": [
+            "Calistria",
+            "Norgorber"
+        ],
+        "Spells": {
+            "Level 2": "charm person",
+            "Level 4": "false belief",
+            "Level 6": "suggestion",
+            "Level 8": "sending",
+            "Level 10": "true seeing",
+            "Level 12": "symbol of persuasion",
+            "Level 14": "scrying, greater",
+            "Level 16": "mind blank",
+            "Level 18": "overwhelming presence"
+        }
+    },
+    {
+        "Name": "Juju",
+        "Deities": [
+            "Wendo"
+        ],
+        "Spells": {
+            "Level 2": "speak with animals",
+            "Level 4": "hideous laughter",
+            "Level 6": "fear",
+            "Level 8": "charm monster",
+            "Level 10": "suggestion, mass",
+            "Level 12": [
+                "contact other plane",
+                "as a 6th-level spell"
+            ],
+            "Level 14": "summon nature's ally 7",
+            "Level 16": "charm monster, mass",
+            "Level 18": "shapechange"
+        }
+    },
+    {
+        "Name": "Life",
+        "Deities": [
+            "Gozreh",
+            "Pharasma",
+            "Sarenrae"
+        ],
+        "Spells": {
+            "Level 2": "detect undead",
+            "Level 4": "restoration, lesser",
+            "Level 6": "neutralize poison",
+            "Level 8": "restoration",
+            "Level 10": "breath of life",
+            "Level 12": "heal",
+            "Level 14": "restoration, greater",
+            "Level 16": "heal, mass",
+            "Level 18": "true resurrection"
+        }
+    },
+    {
+        "Name": "Lore",
+        "Deities": [
+            "Abadar",
+            "Irori",
+            "Nethys"
+        ],
+        "Spells": {
+            "Level 2": "identify",
+            "Level 4": "tongues",
+            "Level 6": "locate object",
+            "Level 8": "legend lore",
+            "Level 10": "contact other plane",
+            "Level 12": "owl's wisdom, mass",
+            "Level 14": "vision",
+            "Level 16": "moment of prescience",
+            "Level 18": "time stop"
+        }
+    },
+    {
+        "Name": "Lunar",
+        "Deities": [
+            "Ashava",
+            "Desna",
+            "Groetus",
+            "Jezelda",
+            "Tsukiyo",
+            "Zon-Kuthon"
+        ],
+        "Spells": {
+            "Level 2": "fumbletongue",
+            "Level 4": "dust of twilight",
+            "Level 6": "rage",
+            "Level 8": "moonstruck",
+            "Level 10": "aspect of the wolf",
+            "Level 12": "litany of madness",
+            "Level 14": "lunar veil",
+            "Level 16": "blood mist",
+            "Level 18": "polar midnight"
+        }
+    },
+    {
+        "Name": "Metal",
+        "Deities": [
+            "Abadar",
+            "Gorum",
+            "Torag"
+        ],
+        "Spells": {
+            "Level 2": "lead blades",
+            "Level 4": "heat metal",
+            "Level 6": "keen edge",
+            "Level 8": "versatile weapon",
+            "Level 10": [
+                "major creation",
+                "metal items only"
+            ],
+            "Level 12": "wall of iron",
+            "Level 14": [
+                "statue",
+                "metal statue instead of iron"
+            ],
+            "Level 16": "repel metal or stone",
+            "Level 18": "iron body"
+        }
+    },
+    {
+        "Name": "Nature",
+        "Deities": [
+            "Erastil",
+            "Gozreh"
+        ],
+        "Spells": {
+            "Level 2": "charm animal",
+            "Level 4": "barkskin",
+            "Level 6": "speak with plants",
+            "Level 8": "grove of respite",
+            "Level 10": "awaken",
+            "Level 12": "stone tell",
+            "Level 14": "creeping doom",
+            "Level 16": "animal shapes",
+            "Level 18": "world wave"
+        }
+    },
+    {
+        "Name": "Occult",
+        "Deities": [
+            "Magdh",
+            "Nethys",
+            "Pharasma",
+            "Tsukiyo"
+        ],
+        "Spells": {
+            "Level 2": "unseen servant",
+            "Level 4": "spectral hand",
+            "Level 6": "clairaudience/clairvoyance",
+            "Level 8": "scrying",
+            "Level 10": "contact other plane",
+            "Level 12": "project image",
+            "Level 14": "vision",
+            "Level 16": "moment of prescience",
+            "Level 18": "astral projection"
+        }
+    },
+    {
+        "Name": "Outer Rifts",
+        "Deities": [
+            "Iomedae",
+            "Groetus",
+            "Lamashtu",
+            "demon lords"
+        ],
+        "Spells": {
+            "Level 2": "endure elements",
+            "Level 4": "resist energy",
+            "Level 6": "vermin shape I",
+            "Level 8": "confusion",
+            "Level 10": "planar binding, lesser",
+            "Level 12": "planar binding",
+            "Level 14": "insanity",
+            "Level 16": "planar binding, greater",
+            "Level 18": "imprisonment"
+        }
+    },
+    {
+        "Name": "Reaper",
+        "Deities": [
+            "Achaekek",
+            "Groetus",
+            "Pharasma"
+        ],
+        "Spells": {
+            "Level 2": "chill touch",
+            "Level 4": "calm spirit",
+            "Level 6": "sands of time",
+            "Level 8": "purge spirit",
+            "Level 10": "slay living",
+            "Level 12": "undeath to death",
+            "Level 14": "destruction",
+            "Level 16": "horrid wilting",
+            "Level 18": "wail of the banshee"
+        }
+    },
+    {
+        "Name": "Shadow",
+        "Deities": [
+            "Groetus",
+            "Lao Shu Po",
+            "Tsukiyo",
+            "Zon-Kuthon"
+        ],
+        "Spells": {
+            "Level 2": "blurred movement",
+            "Level 4": "invisibility",
+            "Level 6": "deeper darkness",
+            "Level 8": "shadow step",
+            "Level 10": "vampiric shadow shield",
+            "Level 12": "shadow walk",
+            "Level 14": "invisibility, mass",
+            "Level 16": "shadow evocation, greater",
+            "Level 18": "shades"
+        }
+    },
+    {
+        "Name": "Solar",
+        "Deities": [
+            "Desna",
+            "Gozreh",
+            "Iomedae",
+            "Keltheald",
+            "Lalaci",
+            "Nurgal",
+            "Sarenrae",
+            "Ymeri"
+        ],
+        "Spells": {
+            "Level 2": "faerie fire",
+            "Level 4": "flaming sphere",
+            "Level 6": "daylight",
+            "Level 8": "dimension door",
+            "Level 10": "planar adaptation",
+            "Level 12": "sirocco",
+            "Level 14": "sunbeam",
+            "Level 16": "sunburst",
+            "Level 18": "prismatic sphere"
+        }
+    },
+    {
+        "Name": "Spellscar",
+        "Deities": [
+            "Gozreh",
+            "Lamashtu",
+            "Nethys",
+            "Zyphus"
+        ],
+        "Spells": {
+            "Level 2": "ray of enfeeblement",
+            "Level 4": "obscure object",
+            "Level 6": "dispel magic",
+            "Level 8": "globe of invulnerability, lesser",
+            "Level 10": "break enchantment",
+            "Level 12": "antimagic field",
+            "Level 14": "spell turning",
+            "Level 16": "spellscar",
+            "Level 18": "mage's disjunction"
+        }
+    },
+    {
+        "Name": "Stone",
+        "Deities": [
+            "Abadar",
+            "Gorum",
+            "Torag"
+        ],
+        "Spells": {
+            "Level 2": "magic stone",
+            "Level 4": "stone call",
+            "Level 6": "meld into stone",
+            "Level 8": "wall of stone",
+            "Level 10": "stoneskin",
+            "Level 12": "stone tell",
+            "Level 14": "statue",
+            "Level 16": "repel metal or stone",
+            "Level 18": "clashing rocks"
+        }
+    },
+    {
+        "Name": "Streets",
+        "Deities": [
+            "Cayden Cailean",
+            "Milani",
+            "Norgorber"
+        ],
+        "Spells": {
+            "Level 2": "disguise self",
+            "Level 4": "detect thoughts",
+            "Level 6": "glyph of warding",
+            "Level 8": "illusory wall",
+            "Level 10": "false vision",
+            "Level 12": "getaway",
+            "Level 14": "screen",
+            "Level 16": "mage's magnificent mansion",
+            "Level 18": "clone"
+        }
+    },
+    {
+        "Name": "Succor",
+        "Deities": [
+            "Milani",
+            "Pharasma",
+            "Qi Zhong",
+            "Sarenrae"
+        ],
+        "Spells": {
+            "Level 2": "ray of enfeeblement",
+            "Level 4": "shield of fortification",
+            "Level 6": "coordinated effort",
+            "Level 8": "shield of fortification, greater",
+            "Level 10": "stoneskin",
+            "Level 12": "heroism, greater",
+            "Level 14": "expend",
+            "Level 16": "spellcrash, greater",
+            "Level 18": "wall of suppression"
+        }
+    },
+    {
+        "Name": "Time",
+        "Deities": [
+            "Gozreh",
+            "Nethys",
+            "Pharasma"
+        ],
+        "Spells": {
+            "Level 2": "memory lapse",
+            "Level 4": "gentle repose",
+            "Level 6": "sands of time",
+            "Level 8": "threefold aspect",
+            "Level 10": "permanency",
+            "Level 12": "contingency",
+            "Level 14": "disintegrate",
+            "Level 16": "temporal stasis",
+            "Level 18": "time stop"
+        }
+    },
+    {
+        "Name": "Volcano",
+        "Deities": [
+            "Flauros",
+            "Mhar",
+            "Rovagug",
+            "Valani",
+            "Yamatsumi",
+            "Ymeri"
+        ],
+        "Spells": {
+            "Level 2": "burning hands",
+            "Level 4": "heat metal",
+            "Level 6": "protection from energy",
+            "Level 8": "volcanic storm",
+            "Level 10": "geyser",
+            "Level 12": "contagious flame",
+            "Level 14": "fire storm",
+            "Level 16": "wall of lava",
+            "Level 18": "meteor swarm"
+        }
+    },
+    {
+        "Name": "Waves",
+        "Deities": [
+            "Gozreh",
+            "Pharasma"
+        ],
+        "Spells": {
+            "Level 2": "touch of the sea",
+            "Level 4": "slipstream",
+            "Level 6": "water breathing",
+            "Level 8": "wall of ice",
+            "Level 10": "geyser",
+            "Level 12": "fluid form",
+            "Level 14": "vortex",
+            "Level 16": "seamantle",
+            "Level 18": "tsunami"
+        }
+    },
+    {
+        "Name": "Whimsy",
+        "Deities": [
+            "Green Mother",
+            "Lantern King",
+            "Ng",
+            "Shyka"
+        ],
+        "Spells": {
+            "Level 2": "faerie fire",
+            "Level 4": "hideous laughter",
+            "Level 6": "shamefully overdressed",
+            "Level 8": "major image",
+            "Level 10": "entice fey, lesser",
+            "Level 12": "mislead",
+            "Level 14": "entice fey",
+            "Level 16": "irresistible dance",
+            "Level 18": "entice fey, greater"
+        }
+    },
+    {
+        "Name": "Wind",
+        "Deities": [
+            "Gozreh",
+            "Shelyn"
+        ],
+        "Spells": {
+            "Level 2": "alter winds",
+            "Level 4": "gust of wind",
+            "Level 6": "cloak of winds",
+            "Level 8": "river of wind",
+            "Level 10": "control winds",
+            "Level 12": "sirocco",
+            "Level 14": "control weather",
+            "Level 16": "whirlwind",
+            "Level 18": "winds of vengeance"
+        }
+    },
+    {
+        "Name": "Winter",
+        "Deities": [
+            "Gorum",
+            "Gozreh",
+            "Kostchtchie",
+            "Ng",
+            "Rovagug"
+        ],
+        "Spells": {
+            "Level 2": "endure elements",
+            "Level 4": "frost fall",
+            "Level 6": "sleet storm",
+            "Level 8": "ice storm",
+            "Level 10": "icy prison",
+            "Level 12": "cone of cold",
+            "Level 14": "ice body",
+            "Level 16": "polar ray",
+            "Level 18": "icy prison, mass"
+        }
+    },
+    {
+        "Name": "Wood",
+        "Deities": [
+            "Erastil",
+            "Gozreh"
+        ],
+        "Spells": {
+            "Level 2": "shillelagh",
+            "Level 4": "barkskin",
+            "Level 6": [
+                "minor creation",
+                "wood items only"
+            ],
+            "Level 8": "thorn body",
+            "Level 10": "tree stride",
+            "Level 12": "ironwood",
+            "Level 14": "transmute metal to wood",
+            "Level 16": "changestaff",
+            "Level 18": "wooden phalanx"
+        }
+    }
+]
