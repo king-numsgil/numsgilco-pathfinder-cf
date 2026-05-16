@@ -1,0 +1,140 @@
+import { type Feat } from "./types";
+
+export const FEAT_TYPES = ["Combat", "General", "Metamagic", "Item Creation", "Teamwork"] as const;
+
+export const featTypeColors: Record<string, string> = {
+    Combat: "red",
+    General: "teal",
+    Metamagic: "violet",
+    "Item Creation": "yellow",
+    Teamwork: "blue",
+};
+
+export const feats: Feat[] = [
+    {
+        id: 1,
+        name: "Power Attack",
+        type: "Combat",
+        prerequisites: "Str 13, BAB +1",
+        benefit: "You can take a –1 penalty on all melee attack rolls to gain a +2 bonus on all melee damage rolls. For every 4 points of BAB, the penalty increases by –1 and the bonus by +2.",
+    },
+    {
+        id: 2,
+        name: "Cleave",
+        type: "Combat",
+        prerequisites: "Str 13, Power Attack, BAB +1",
+        benefit: "As a standard action, you can make a single attack at your full BAB against a foe. If the attack hits, you may make another attack against a second foe within reach.",
+    },
+    {
+        id: 3,
+        name: "Combat Casting",
+        type: "General",
+        prerequisites: "—",
+        benefit: "You get a +4 bonus on concentration checks made to cast a spell or use a spell-like ability when casting on the defensive or while grappled.",
+    },
+    {
+        id: 4,
+        name: "Spell Focus",
+        type: "General",
+        prerequisites: "—",
+        benefit: "Add +1 to the Difficulty Class for all saving throws against spells from the school of magic you select.",
+    },
+    {
+        id: 5,
+        name: "Toughness",
+        type: "General",
+        prerequisites: "—",
+        benefit: "You gain +3 hit points. For every Hit Die you possess beyond 3, you gain an additional +1 hit point.",
+    },
+    {
+        id: 6,
+        name: "Iron Will",
+        type: "General",
+        prerequisites: "—",
+        benefit: "You get a +2 bonus on all Will saving throws.",
+    },
+    {
+        id: 7,
+        name: "Dodge",
+        type: "Combat",
+        prerequisites: "Dex 13",
+        benefit: "You gain a +1 dodge bonus to your AC. A condition that makes you lose your Dex bonus to AC also makes you lose the benefits of this feat.",
+    },
+    {
+        id: 8,
+        name: "Improved Initiative",
+        type: "Combat",
+        prerequisites: "—",
+        benefit: "You get a +4 bonus on initiative checks.",
+    },
+    {
+        id: 9,
+        name: "Weapon Focus",
+        type: "Combat",
+        prerequisites: "Proficiency with selected weapon, BAB +1",
+        benefit: "You gain a +1 bonus on all attack rolls you make using the selected weapon.",
+    },
+    {
+        id: 10,
+        name: "Vital Strike",
+        type: "Combat",
+        prerequisites: "BAB +6",
+        benefit: "When you use the attack action, you can make one attack at your highest BAB that deals additional damage. Roll the weapon's damage dice for the attack twice and add the results together.",
+    },
+    {
+        id: 11,
+        name: "Improved Critical",
+        type: "Combat",
+        prerequisites: "Proficiency with weapon, BAB +8",
+        benefit: "When using the weapon you selected, your threat range is doubled. This effect doesn't stack with any other effect that expands the threat range.",
+    },
+    {
+        id: 12,
+        name: "Great Fortitude",
+        type: "General",
+        prerequisites: "—",
+        benefit: "You get a +2 bonus on all Fortitude saving throws.",
+    },
+    {
+        id: 13,
+        name: "Lightning Reflexes",
+        type: "General",
+        prerequisites: "—",
+        benefit: "You get a +2 bonus on all Reflex saving throws.",
+    },
+    {
+        id: 14,
+        name: "Empower Spell",
+        type: "Metamagic",
+        prerequisites: "—",
+        benefit: "All variable, numeric effects of an empowered spell are increased by half. An empowered spell uses up a spell slot two levels higher than the spell's actual level.",
+    },
+    {
+        id: 15,
+        name: "Extend Spell",
+        type: "Metamagic",
+        prerequisites: "—",
+        benefit: "An extended spell lasts twice as long as normal. An extended spell uses up a spell slot one level higher than the spell's actual level.",
+    },
+    {
+        id: 16,
+        name: "Quicken Spell",
+        type: "Metamagic",
+        prerequisites: "—",
+        benefit: "Casting a quickened spell is a swift action. A quickened spell uses up a spell slot four levels higher than the spell's actual level.",
+    },
+    {
+        id: 17,
+        name: "Outflank",
+        type: "Teamwork",
+        prerequisites: "BAB +4",
+        benefit: "Whenever you and an ally who also has this feat are flanking the same creature, your flanking bonus on attack rolls increases to +4.",
+    },
+    {
+        id: 18,
+        name: "Craft Wondrous Item",
+        type: "Item Creation",
+        prerequisites: "Caster level 3rd",
+        benefit: "You can create wondrous items. Crafting a wondrous item takes 1 day for each 1,000 gp in its price. The cost to create = 1/2 the market price.",
+    },
+];
