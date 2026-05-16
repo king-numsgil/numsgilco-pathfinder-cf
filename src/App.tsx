@@ -21,6 +21,9 @@ function App() {
                 <p>
                     Edit <code>src/App.tsx</code> or <code>worker/index.ts</code> and save to test <code>HMR</code>
                 </p>
+                <p>
+                    This is a Test Deploy!
+                </p>
             </div>
             <ul style={{display: "flex", gap: "1rem", listStyle: "none", padding: 0}}>
                 <li>
