@@ -2,8 +2,8 @@ import {
     Badge,
     Button,
     Center,
-    Chip,
     Group,
+    Indicator,
     Loader,
     Stack,
     Table,
@@ -11,10 +11,27 @@ import {
     TextInput,
     Title,
 } from "@mantine/core";
-import { useEffect, useRef, useState } from "react";
-import { FiSearch } from "react-icons/fi";
+import { useEffect, useRef, useState, useTransition } from "react";
+import { FiFilter, FiSearch } from "react-icons/fi";
 import { Outlet, useNavigate } from "react-router-dom";
-import { type LookupItem, type SpellListItem, fetchSchools, fetchSpells } from "../api";
+import {
+    type DomainWithSubdomains,
+    type LookupItem,
+    type SpellListItem,
+    fetchBloodlines,
+    fetchClasses,
+    fetchDomains,
+    fetchMysteries,
+    fetchPatrons,
+    fetchSchools,
+    fetchSpells,
+} from "../api";
+import { SpellFilters } from "./SpellFilters";
+import {
+    EMPTY_FILTERS,
+    type FilterState,
+    activeFilterCount,
+} from "./spellFilterState";
 
 const PAGE_SIZE = 50;
 
@@ -42,105 +59,215 @@ function useDebounce<T>(value: T, delay: number): T {
 export function Spells() {
     const navigate = useNavigate();
 
-    // Filter state
     const [search, setSearch] = useState("");
-    const [selectedSchoolIds, setSelectedSchoolIds] = useState<string[]>([]);
     const debouncedSearch = useDebounce(search, 300);
-    const schoolsParam = selectedSchoolIds.join(",");
+
+    const [filters, setFilters] = useState<FilterState>(EMPTY_FILTERS);
+    const [drawerOpen, setDrawerOpen] = useState(false);
 
     // Lookup data
     const [schools, setSchools] = useState<LookupItem[]>([]);
+    const [classes, setClasses] = useState<LookupItem[]>([]);
+    const [domains, setDomains] = useState<DomainWithSubdomains[]>([]);
+    const [bloodlines, setBloodlines] = useState<LookupItem[]>([]);
+    const [patrons, setPatrons] = useState<LookupItem[]>([]);
+    const [mysteries, setMysteries] = useState<LookupItem[]>([]);
 
     // Results
     const [results, setResults] = useState<SpellListItem[]>([]);
     const [total, setTotal] = useState(0);
-    const [loading, setLoading] = useState(true);
-    const [loadingMore, setLoadingMore] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [hasLoaded, setHasLoaded] = useState(false);
+    const [loadingMore, setLoadingMore] = useState(false);
 
-    // Prevent stale responses from a previous fetch overwriting a later one
+    const [isPending, startTransition] = useTransition();
+
     const fetchSeq = useRef(0);
+    const loadMoreSeq = useRef(0);
+    const sentinelRef = useRef<HTMLDivElement>(null);
+    const isLoadingMoreRef = useRef(false);
 
+    // Load all lookup data in parallel on mount
     useEffect(() => {
-        fetchSchools().then(setSchools).catch(() => {/* non-fatal */});
+        Promise.all([
+            fetchSchools(),
+            fetchClasses(),
+            fetchDomains(),
+            fetchBloodlines(),
+            fetchPatrons(),
+            fetchMysteries(),
+        ])
+            .then(([s, c, d, b, p, m]) => {
+                setSchools(s);
+                setClasses(c);
+                setDomains(d);
+                setBloodlines(b);
+                setPatrons(p);
+                setMysteries(m);
+            })
+            .catch(() => {/* non-fatal */});
     }, []);
 
-    // Refetch from scratch whenever filters change
+    // Stable string keys for array filters (used as effect deps)
+    const levelKey     = filters.levels.join(",");
+    const schoolKey    = filters.schoolIds.join(",");
+    const classKey     = filters.classIds.join(",");
+    const domainKey    = filters.domainIds.join(",");
+    const subdomainKey = filters.subdomainIds.join(",");
+    const bloodlineKey = filters.bloodlineIds.join(",");
+    const patronKey    = filters.patronIds.join(",");
+    const mysteryKey   = filters.mysteryIds.join(",");
+
+    // Re-fetch first page whenever any filter changes
     useEffect(() => {
         const seq = ++fetchSeq.current;
-        setLoading(true);
-        setError(null);
-        fetchSpells({
-            q: debouncedSearch || undefined,
-            school: schoolsParam || undefined,
-            limit: PAGE_SIZE,
-            offset: 0,
-        })
-            .then((data) => {
+        ++loadMoreSeq.current;        // invalidate any in-flight loadMore
+        isLoadingMoreRef.current = false;
+
+        startTransition(async () => {
+            try {
+                const data = await fetchSpells({
+                    q: debouncedSearch || undefined,
+                    level: levelKey || undefined,
+                    school: schoolKey || undefined,
+                    class: classKey || undefined,
+                    domain: domainKey || undefined,
+                    subdomain: subdomainKey || undefined,
+                    bloodline: bloodlineKey || undefined,
+                    patron: patronKey || undefined,
+                    mystery: mysteryKey || undefined,
+                    limit: PAGE_SIZE,
+                    offset: 0,
+                });
                 if (seq !== fetchSeq.current) return;
                 setResults(data.data);
                 setTotal(data.total);
-            })
-            .catch(() => {
+                setError(null);
+            } catch {
                 if (seq !== fetchSeq.current) return;
                 setError("Failed to load spells.");
-            })
-            .finally(() => {
-                if (seq === fetchSeq.current) setLoading(false);
-            });
-    }, [debouncedSearch, schoolsParam]);
+            } finally {
+                if (seq === fetchSeq.current) setHasLoaded(true);
+            }
+        });
+    }, [debouncedSearch, levelKey, schoolKey, classKey, domainKey, subdomainKey, bloodlineKey, patronKey, mysteryKey]);
 
-    function loadMore() {
-        setLoadingMore(true);
-        fetchSpells({
-            q: debouncedSearch || undefined,
-            school: schoolsParam || undefined,
-            limit: PAGE_SIZE,
-            offset: results.length,
-        })
-            .then((data) => {
-                setResults((prev) => [...prev, ...data.data]);
-                setTotal(data.total);
-            })
-            .catch(() => setError("Failed to load more spells."))
-            .finally(() => setLoadingMore(false));
+    // Infinite scroll — no dep array so the closure always sees current values.
+    // Early-return keeps setup cost near zero when there's nothing to load.
+    useEffect(() => {
+        const sentinel = sentinelRef.current;
+        if (!sentinel || !hasLoaded || isPending || results.length >= total) return;
+
+        const myLmSeq = loadMoreSeq.current;
+
+        const observer = new IntersectionObserver(
+            (entries) => {
+                if (!entries[0].isIntersecting) return;
+                if (isLoadingMoreRef.current) return;
+                if (loadMoreSeq.current !== myLmSeq) return;
+
+                isLoadingMoreRef.current = true;
+                setLoadingMore(true);
+                fetchSpells({
+                    q: debouncedSearch || undefined,
+                    level: levelKey || undefined,
+                    school: schoolKey || undefined,
+                    class: classKey || undefined,
+                    domain: domainKey || undefined,
+                    subdomain: subdomainKey || undefined,
+                    bloodline: bloodlineKey || undefined,
+                    patron: patronKey || undefined,
+                    mystery: mysteryKey || undefined,
+                    limit: PAGE_SIZE,
+                    offset: results.length,
+                })
+                    .then((data) => {
+                        if (loadMoreSeq.current !== myLmSeq) return;
+                        setResults((prev) => [...prev, ...data.data]);
+                        setTotal(data.total);
+                    })
+                    .catch(() => setError("Failed to load more spells."))
+                    .finally(() => {
+                        if (loadMoreSeq.current === myLmSeq) {
+                            isLoadingMoreRef.current = false;
+                            setLoadingMore(false);
+                        }
+                    });
+            },
+            { rootMargin: "200px" },
+        );
+
+        observer.observe(sentinel);
+        return () => observer.disconnect();
+    });
+
+    function handleFilterChange<K extends keyof FilterState>(key: K, value: FilterState[K]) {
+        setFilters((prev) => ({ ...prev, [key]: value }));
     }
 
-    const hasMore = results.length < total;
+    const filterCount = activeFilterCount(filters);
+    const initialLoading = !hasLoaded;
 
     return (
         <Stack gap="lg">
             <div>
                 <Title order={2}>Spells</Title>
                 <Text size="sm" c="dimmed" mt={4}>
-                    {loading ? "Loading…" : `Showing ${results.length} of ${total} spells`}
+                    {initialLoading
+                        ? "Loading…"
+                        : `Showing ${results.length} of ${total} spells`}
                 </Text>
             </div>
 
-            <TextInput
-                placeholder="Search by name…"
-                leftSection={<FiSearch size={16} />}
-                value={search}
-                onChange={(e) => setSearch(e.currentTarget.value)}
-                maw={400}
-            />
+            <Group gap="sm" align="flex-end">
+                <TextInput
+                    placeholder="Search by name…"
+                    leftSection={<FiSearch size={16} />}
+                    value={search}
+                    onChange={(e) => setSearch(e.currentTarget.value)}
+                    style={{ flex: 1, maxWidth: 400 }}
+                />
+                <Indicator
+                    label={filterCount}
+                    size={16}
+                    disabled={filterCount === 0}
+                    color="teal"
+                >
+                    <Button
+                        variant={filterCount > 0 ? "light" : "default"}
+                        color={filterCount > 0 ? "teal" : undefined}
+                        leftSection={<FiFilter size={14} />}
+                        onClick={() => setDrawerOpen(true)}
+                    >
+                        Filters
+                    </Button>
+                </Indicator>
+            </Group>
 
-            {schools.length > 0 && (
-                <Chip.Group multiple value={selectedSchoolIds} onChange={setSelectedSchoolIds}>
-                    <Group gap="xs">
-                        {schools.map((school) => (
-                            <Chip key={school.id} value={school.id} size="sm" variant="outline" color="teal">
-                                {school.name}
-                            </Chip>
-                        ))}
-                    </Group>
-                </Chip.Group>
-            )}
+            <SpellFilters
+                opened={drawerOpen}
+                onClose={() => setDrawerOpen(false)}
+                filters={filters}
+                onChange={handleFilterChange}
+                onClear={() => setFilters(EMPTY_FILTERS)}
+                schools={schools}
+                classes={classes}
+                domains={domains}
+                bloodlines={bloodlines}
+                patrons={patrons}
+                mysteries={mysteries}
+            />
 
             {error && <Text c="red" size="sm">{error}</Text>}
 
             <Table.ScrollContainer minWidth={680}>
-                <Table striped highlightOnHover withTableBorder withColumnBorders={false}>
+                <Table
+                    striped
+                    highlightOnHover
+                    withTableBorder
+                    withColumnBorders={false}
+                    style={{ opacity: isPending ? 0.6 : 1, transition: "opacity 0.15s" }}
+                >
                     <Table.Thead>
                         <Table.Tr>
                             <Table.Th style={{ minWidth: 180 }}>Name</Table.Th>
@@ -150,7 +277,7 @@ export function Spells() {
                         </Table.Tr>
                     </Table.Thead>
                     <Table.Tbody>
-                        {loading ? (
+                        {initialLoading ? (
                             <Table.Tr>
                                 <Table.Td colSpan={4}>
                                     <Center py="xl"><Loader size="sm" /></Center>
@@ -207,16 +334,12 @@ export function Spells() {
                 </Table>
             </Table.ScrollContainer>
 
-            {hasMore && !loading && (
-                <Center>
-                    <Button
-                        variant="subtle"
-                        color="teal"
-                        onClick={loadMore}
-                        loading={loadingMore}
-                    >
-                        Load more ({total - results.length} remaining)
-                    </Button>
+            {/* Scroll sentinel — observed by IntersectionObserver to trigger next page */}
+            <div ref={sentinelRef} style={{ height: 1 }} />
+
+            {loadingMore && (
+                <Center py="sm">
+                    <Loader size="xs" color="teal" />
                 </Center>
             )}
 
