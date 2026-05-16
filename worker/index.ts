@@ -1,10 +1,12 @@
-import {Hono} from "hono";
-const app = new Hono();
+import { Hono } from "hono";
+import lookups from "./routes/lookups";
+import spells from "./routes/spells";
 
-app.get("/api/", (c) => {
-    return c.json({
-        name: "Cloudflare",
-    });
-});
+type HonoEnv = { Bindings: Env };
+
+const app = new Hono<HonoEnv>();
+
+app.route("/api", lookups);
+app.route("/api/spells", spells);
 
 export default app;
