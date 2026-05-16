@@ -1,11 +1,13 @@
 import { Badge, Chip, Group, Stack, Table, Text, TextInput, Title } from "@mantine/core";
 import { useState } from "react";
 import { FiSearch } from "react-icons/fi";
+import { Outlet, useNavigate } from "react-router-dom";
 import { SPELL_SCHOOLS, schoolColors, spells } from "../data/spells";
 
 export function Spells() {
     const [search, setSearch] = useState("");
     const [schools, setSchools] = useState<string[]>([]);
+    const navigate = useNavigate();
 
     const filtered = spells.filter((spell) => {
         const matchesSearch =
@@ -63,7 +65,11 @@ export function Spells() {
                             </Table.Tr>
                         ) : (
                             filtered.map((spell) => (
-                                <Table.Tr key={spell.id} style={{ cursor: "pointer" }}>
+                                <Table.Tr
+                                    key={spell.id}
+                                    style={{ cursor: "pointer" }}
+                                    onClick={() => navigate(`/spells/${spell.id}`)}
+                                >
                                     <Table.Td>
                                         <Text fw={600} size="sm" c="teal.4">{spell.name}</Text>
                                         {spell.descriptor && (
@@ -97,6 +103,9 @@ export function Spells() {
                     </Table.Tbody>
                 </Table>
             </Table.ScrollContainer>
+
+            {/* Child route renders the detail modal here (portaled to body) */}
+            <Outlet />
         </Stack>
     );
 }

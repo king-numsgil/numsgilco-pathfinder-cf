@@ -1,11 +1,13 @@
 import { Badge, Chip, Group, Stack, Table, Text, TextInput, Title } from "@mantine/core";
 import { useState } from "react";
 import { FiSearch } from "react-icons/fi";
+import { Outlet, useNavigate } from "react-router-dom";
 import { FEAT_TYPES, featTypeColors, feats } from "../data/feats";
 
 export function Feats() {
     const [search, setSearch] = useState("");
     const [types, setTypes] = useState<string[]>([]);
+    const navigate = useNavigate();
 
     const filtered = feats.filter((feat) => {
         const matchesSearch =
@@ -62,7 +64,11 @@ export function Feats() {
                             </Table.Tr>
                         ) : (
                             filtered.map((feat) => (
-                                <Table.Tr key={feat.id} style={{ cursor: "pointer" }}>
+                                <Table.Tr
+                                    key={feat.id}
+                                    style={{ cursor: "pointer" }}
+                                    onClick={() => navigate(`/feats/${feat.id}`)}
+                                >
                                     <Table.Td>
                                         <Text fw={600} size="sm" c="teal.4">{feat.name}</Text>
                                     </Table.Td>
@@ -87,6 +93,9 @@ export function Feats() {
                     </Table.Tbody>
                 </Table>
             </Table.ScrollContainer>
+
+            {/* Child route renders the detail modal here (portaled to body) */}
+            <Outlet />
         </Stack>
     );
 }
