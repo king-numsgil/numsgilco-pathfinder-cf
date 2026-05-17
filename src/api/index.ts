@@ -69,6 +69,7 @@ export type SpellSearchParams = {
     subdomain?: string;
     school?: string;
     subschool?: string;
+    descriptor?: string;
     bloodline?: string;
     patron?: string;
     mystery?: string;
@@ -99,10 +100,17 @@ async function fetchLookup(path: string): Promise<LookupItem[]> {
 }
 
 export const fetchSchools = () => fetchLookup("/api/schools");
+export const fetchSubschools = () => fetchLookup("/api/subschools");
 export const fetchClasses = () => fetchLookup("/api/classes");
 export const fetchBloodlines = () => fetchLookup("/api/bloodlines");
 export const fetchPatrons = () => fetchLookup("/api/patrons");
 export const fetchMysteries = () => fetchLookup("/api/mysteries");
+
+export async function fetchDescriptors(): Promise<string[]> {
+    const res = await fetch("/api/descriptors");
+    if (!res.ok) throw new Error("Failed to fetch descriptors");
+    return res.json() as Promise<string[]>;
+}
 
 export async function fetchDomains(): Promise<DomainWithSubdomains[]> {
     const res = await fetch("/api/domains");

@@ -29,6 +29,7 @@ function buildWhere(
         subdomainIds: string[];
         schoolIds: string[];
         subschoolIds: string[];
+        descriptors: string[];
         bloodlineIds: string[];
         patronIds: string[];
         mysteryIds: string[];
@@ -36,7 +37,7 @@ function buildWhere(
 ): SQL | undefined {
     const {
         q, levels, classIds, domainIds, subdomainIds, schoolIds, subschoolIds,
-        bloodlineIds, patronIds, mysteryIds,
+        descriptors, bloodlineIds, patronIds, mysteryIds,
     } = params;
 
     const filters: SQL[] = [];
@@ -49,6 +50,13 @@ function buildWhere(
     }
     if (subschoolIds.length) {
         filters.push(inArray(s.spells.subschoolId, subschoolIds));
+    }
+    if (descriptors.length) {
+        // Postgres && operator: spell's descriptor array overlaps with the selected set
+        filters.push(sql`${s.spells.descriptors} && ARRAY[${sql.join(
+            descriptors.map((d) => sql`${d}`),
+            sql`, `,
+        )}]::text[]`);
     }
 
     // Each source type produces an EXISTS correlated subquery.
@@ -143,6 +151,7 @@ app.get("/", async (c) => {
         subdomainIds: parseIds(c.req.query("subdomain")),
         schoolIds: parseIds(c.req.query("school")),
         subschoolIds: parseIds(c.req.query("subschool")),
+        descriptors: parseIds(c.req.query("descriptor")),
         bloodlineIds: parseIds(c.req.query("bloodline")),
         patronIds: parseIds(c.req.query("patron")),
         mysteryIds: parseIds(c.req.query("mystery")),

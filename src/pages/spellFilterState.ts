@@ -1,6 +1,8 @@
 export type FilterState = {
     levels: string[];
     schoolIds: string[];
+    subschoolIds: string[];
+    descriptors: string[];
     classIds: string[];
     domainIds: string[];
     subdomainIds: string[];
@@ -12,6 +14,8 @@ export type FilterState = {
 export const EMPTY_FILTERS: FilterState = {
     levels: [],
     schoolIds: [],
+    subschoolIds: [],
+    descriptors: [],
     classIds: [],
     domainIds: [],
     subdomainIds: [],

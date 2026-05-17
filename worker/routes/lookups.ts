@@ -1,4 +1,4 @@
-import { asc } from "drizzle-orm";
+import { asc, sql } from "drizzle-orm";
 import { Hono } from "hono";
 import { createDb } from "../db";
 import * as s from "../db/schema";
@@ -23,6 +23,15 @@ app.get("/subschools", async (c) => {
     const db = createDb(c.env.HYPERDRIVE.connectionString);
     const rows = await db.select().from(s.subschools).orderBy(asc(s.subschools.name));
     return c.json(rows);
+});
+
+app.get("/descriptors", async (c) => {
+    const db = createDb(c.env.HYPERDRIVE.connectionString);
+    const rows = await db
+        .selectDistinct({descriptor: sql<string>`unnest(${s.spells.descriptors})`})
+        .from(s.spells)
+        .orderBy(sql`1`);
+    return c.json(rows.map((r) => r.descriptor).filter(Boolean));
 });
 
 app.get("/deities", async (c) => {

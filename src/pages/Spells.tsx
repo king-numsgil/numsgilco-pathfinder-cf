@@ -7,11 +7,13 @@ import {
     type DomainWithSubdomains,
     fetchBloodlines,
     fetchClasses,
+    fetchDescriptors,
     fetchDomains,
     fetchMysteries,
     fetchPatrons,
     fetchSchools,
     fetchSpells,
+    fetchSubschools,
     type LookupItem,
     type SpellListItem,
 } from "../api";
@@ -43,6 +45,8 @@ export const Spells: FC = () => {
 
     // Lookup data
     const [schools, setSchools] = useState<LookupItem[]>([]);
+    const [subschools, setSubschools] = useState<LookupItem[]>([]);
+    const [descriptorOptions, setDescriptorOptions] = useState<string[]>([]);
     const [classes, setClasses] = useState<LookupItem[]>([]);
     const [domains, setDomains] = useState<DomainWithSubdomains[]>([]);
     const [bloodlines, setBloodlines] = useState<LookupItem[]>([]);
@@ -67,13 +71,17 @@ export const Spells: FC = () => {
     useEffect(() => {
         Promise.all([
             fetchSchools(),
+            fetchSubschools(),
+            fetchDescriptors(),
             fetchClasses(),
             fetchDomains(),
             fetchBloodlines(),
             fetchPatrons(),
             fetchMysteries(),
-        ]).then(([s, c, d, b, p, m]) => {
+        ]).then(([s, ss, desc, c, d, b, p, m]) => {
             setSchools(s);
+            setSubschools(ss);
+            setDescriptorOptions(desc);
             setClasses(c);
             setDomains(d);
             setBloodlines(b);
@@ -86,6 +94,8 @@ export const Spells: FC = () => {
     // Stable string keys for array filters (used as effect deps)
     const levelKey = filters.levels.join(",");
     const schoolKey = filters.schoolIds.join(",");
+    const subschoolKey = filters.subschoolIds.join(",");
+    const descriptorKey = filters.descriptors.join(",");
     const classKey = filters.classIds.join(",");
     const domainKey = filters.domainIds.join(",");
     const subdomainKey = filters.subdomainIds.join(",");
@@ -105,6 +115,8 @@ export const Spells: FC = () => {
                     q: debouncedSearch || undefined,
                     level: levelKey || undefined,
                     school: schoolKey || undefined,
+                    subschool: subschoolKey || undefined,
+                    descriptor: descriptorKey || undefined,
                     class: classKey || undefined,
                     domain: domainKey || undefined,
                     subdomain: subdomainKey || undefined,
@@ -131,7 +143,7 @@ export const Spells: FC = () => {
                 }
             }
         });
-    }, [debouncedSearch, levelKey, schoolKey, classKey, domainKey, subdomainKey, bloodlineKey, patronKey, mysteryKey]);
+    }, [debouncedSearch, levelKey, schoolKey, subschoolKey, descriptorKey, classKey, domainKey, subdomainKey, bloodlineKey, patronKey, mysteryKey]);
 
     // Infinite scroll — no dep array so the closure always sees current values.
     // Early-return keeps setup cost near zero when there's nothing to load.
@@ -161,6 +173,8 @@ export const Spells: FC = () => {
                     q: debouncedSearch || undefined,
                     level: levelKey || undefined,
                     school: schoolKey || undefined,
+                    subschool: subschoolKey || undefined,
+                    descriptor: descriptorKey || undefined,
                     class: classKey || undefined,
                     domain: domainKey || undefined,
                     subdomain: subdomainKey || undefined,
@@ -240,6 +254,8 @@ export const Spells: FC = () => {
             onChange={handleFilterChange}
             onClear={() => setFilters(EMPTY_FILTERS)}
             schools={schools}
+            subschools={subschools}
+            descriptorOptions={descriptorOptions}
             classes={classes}
             domains={domains}
             bloodlines={bloodlines}

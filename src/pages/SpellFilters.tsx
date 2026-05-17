@@ -38,6 +38,8 @@ interface Props {
     onChange: <K extends keyof FilterState>(key: K, value: FilterState[K]) => void;
     onClear: () => void;
     schools: LookupItem[];
+    subschools: LookupItem[];
+    descriptorOptions: string[];
     classes: LookupItem[];
     domains: DomainWithSubdomains[];
     bloodlines: LookupItem[];
@@ -53,6 +55,8 @@ export const SpellFilters: FC<Props> =
          onChange,
          onClear,
          schools,
+         subschools,
+         descriptorOptions,
          classes,
          domains,
          bloodlines,
@@ -119,6 +123,30 @@ export const SpellFilters: FC<Props> =
                             ))}
                         </Group>
                     </Chip.Group>
+                </FilterSection>
+
+                <FilterSection label="Subschool">
+                    <MultiSelect
+                        data={toOptions(subschools)}
+                        value={filters.subschoolIds}
+                        onChange={(v) => onChange("subschoolIds", v)}
+                        placeholder="Any subschool"
+                        searchable
+                        clearable
+                        maxDropdownHeight={200}
+                    />
+                </FilterSection>
+
+                <FilterSection label="Descriptor">
+                    <MultiSelect
+                        data={descriptorOptions}
+                        value={filters.descriptors}
+                        onChange={(v) => onChange("descriptors", v)}
+                        placeholder="Any descriptor"
+                        searchable
+                        clearable
+                        maxDropdownHeight={200}
+                    />
                 </FilterSection>
 
                 <Divider/>
