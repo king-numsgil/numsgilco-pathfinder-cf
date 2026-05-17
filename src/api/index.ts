@@ -12,10 +12,22 @@ export type DomainWithSubdomains = InferResponseType<typeof client.api.domains.$
 export type SpellListResponse = InferResponseType<typeof client.api.spells.$get>;
 export type SpellListItem = SpellListResponse["data"][number];
 export type SpellDetail = InferResponseType<(typeof client.api.spells)[":id"]["$get"], 200>;
+export type FeatListResponse = InferResponseType<typeof client.api.feats.$get>;
+export type FeatListItem = FeatListResponse["data"][number];
+export type FeatDetail = InferResponseType<(typeof client.api.feats)[":id"]["$get"], 200>;
 
 // ─── Request params ───────────────────────────────────────────────────────────
 // Defined manually: the worker routes use ad-hoc c.req.query() without Zod
 // validators, so InferRequestType has nothing to derive from.
+
+export type FeatSearchParams = {
+    q?: string;
+    type?: string;
+    maxBab?: number;
+    maxCl?: number;
+    limit?: number;
+    offset?: number;
+};
 
 export type SpellSearchParams = {
     q?: string;
@@ -108,5 +120,32 @@ export async function fetchSpell(id: string): Promise<SpellDetail> {
     const res = await client.api.spells[":id"].$get({param: {id}});
     if (res.status === 404) throw new Error("Spell not found");
     if (!res.ok) throw new Error("Failed to fetch spell");
+    return res.json();
+}
+
+export async function fetchFeatTypes(): Promise<string[]> {
+    const res = await client.api["feat-types"].$get();
+    if (!res.ok) throw new Error("Failed to fetch feat types");
+    return res.json();
+}
+
+export async function fetchFeats(params: FeatSearchParams): Promise<FeatListResponse> {
+    const query: Record<string, string> = {};
+    if (params.q) query.q = params.q;
+    if (params.type) query.type = params.type;
+    if (params.maxBab !== undefined) query.maxBab = String(params.maxBab);
+    if (params.maxCl !== undefined) query.maxCl = String(params.maxCl);
+    if (params.limit !== undefined) query.limit = String(params.limit);
+    if (params.offset !== undefined) query.offset = String(params.offset);
+
+    const res = await client.api.feats.$get({query});
+    if (!res.ok) throw new Error("Failed to fetch feats");
+    return res.json();
+}
+
+export async function fetchFeat(id: string): Promise<FeatDetail> {
+    const res = await client.api.feats[":id"].$get({param: {id}});
+    if (res.status === 404) throw new Error("Feat not found");
+    if (!res.ok) throw new Error("Failed to fetch feat");
     return res.json();
 }

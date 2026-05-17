@@ -69,6 +69,14 @@ const app = new Hono<HonoEnv>()
             .from(s.spells)
             .orderBy(sql`1`);
         return c.json(rows.map((r) => r.descriptor).filter(Boolean));
+    })
+    .get("/feat-types", async (c) => {
+        const db = createDb(c.env.HYPERDRIVE.connectionString);
+        const rows = await db
+            .selectDistinct({type: sql<string>`unnest(${s.feats.types})`})
+            .from(s.feats)
+            .orderBy(sql`1`);
+        return c.json(rows.map((r) => r.type).filter(Boolean));
     });
 
 export default app;
