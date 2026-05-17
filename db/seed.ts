@@ -98,7 +98,7 @@ type FeatEntry = {
     type: string[];
     description: string;
     prerequisites: string | null;
-    prerequisite_data: unknown;
+    prerequisite_data: RawPrereqNode[] | null;
     benefit: string;
     normal: string | null;
     special: string | null;
@@ -109,6 +109,27 @@ type FeatEntry = {
     source: string;
     multiples: boolean;
 };
+
+// ─── Prerequisite normalization types ────────────────────────────────────────
+
+// Raw shapes as they appear in feats.json
+type RawPrereqNode =
+    | { type: "stat"; name: string; value: number; or: RawPrereqNode | null }
+    | { type: "feat"; name: string; note: string | null; or: RawPrereqNode | null }
+    | { type: "skill"; name: string; rank: number; or: RawPrereqNode | null }
+    | { type: "special"; condition: string; or: RawPrereqNode | null };
+
+// Normalized shapes stored in the DB
+type StatSubType = "ability" | "bab" | "caster_level" | "class_level" | "character_level";
+
+type NormPrereqNode =
+    | { type: "stat"; subType: StatSubType; name: string; value: number; or: NormPrereqNode | null }
+    | { type: "feat"; name: string; note: string | null; or: NormPrereqNode | null }
+    | { type: "skill"; name: string; rank: number; or: NormPrereqNode | null }
+    | { type: "class_feature"; feature: string; or: NormPrereqNode | null }
+    | { type: "alignment"; value: string; or: NormPrereqNode | null }
+    | { type: "channel_energy"; minDice: number; or: NormPrereqNode | null }
+    | { type: "special"; condition: string; or: NormPrereqNode | null };
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -145,6 +166,142 @@ function normalizeFeatType(t: string): string {
         FEAT_TYPE_MAP[key] ??
         t.trim().charAt(0).toUpperCase() + t.trim().slice(1)
     );
+}
+
+// ─── Prerequisite normalization ───────────────────────────────────────────────
+
+const ABILITY_NAMES = new Set(["Strength", "Dexterity", "Constitution", "Intelligence", "Wisdom", "Charisma"]);
+
+function getStatSubType(name: string): StatSubType {
+    if (name === "Base Attack Bonus") return "bab";
+    if (name === "Caster Level") return "caster_level";
+    if (name === "Character Level") return "character_level";
+    if (ABILITY_NAMES.has(name)) return "ability";
+    return "class_level"; // e.g. "Fighter Level", "Mesmerist Level"
+}
+
+const CLASS_FEATURE_RE = / Class Feature$/i;
+// "any X Alignment" is treated identically to "X Alignment"
+const ALIGNMENT_RE = /^(?:any\s+)?(Chaotic|Evil|Good|Lawful|Neutral|Nongood|Nonevil|Nonlawful|Nonchaotic) Alignment$/i;
+const CHANNEL_DICE_RE = /^Channel Energy (\d+)d\d+$/i;
+const SKILL_RANK_RE = /^(.+?)\s+(\d+)\s+ranks?$/i;
+const BAB_SEGMENT_RE = /^base attack bonus \+?(\d+)$/i;
+
+/**
+ * Parse a single condition string (possibly a semicolon-split segment) into a
+ * normalized node. `or` is the already-normalized or-chain to attach, if any.
+ */
+function parseCondition(
+    condition: string,
+    or: NormPrereqNode | null,
+    featNameMap: Map<string, string>,
+): NormPrereqNode {
+    const s = condition.trim();
+
+    const alignMatch = s.match(ALIGNMENT_RE);
+    if (alignMatch) {
+        const v = alignMatch[1];
+        return {type: "alignment", value: v.charAt(0).toUpperCase() + v.slice(1).toLowerCase(), or};
+    }
+
+    const chanMatch = s.match(CHANNEL_DICE_RE);
+    if (chanMatch) {
+        return {type: "channel_energy", minDice: parseInt(chanMatch[1], 10), or};
+    }
+
+    if (CLASS_FEATURE_RE.test(s)) {
+        return {type: "class_feature", feature: s.replace(CLASS_FEATURE_RE, "").trim().toLowerCase(), or};
+    }
+
+    // Skill rank — only matches in compound-split segments; normal skills come
+    // through as type "skill" directly from the JSON
+    const skillMatch = s.match(SKILL_RANK_RE);
+    if (skillMatch) {
+        return {type: "skill", name: skillMatch[1].trim(), rank: parseInt(skillMatch[2], 10), or};
+    }
+
+    // BAB expressed as text inside a compound condition
+    const babMatch = s.match(BAB_SEGMENT_RE);
+    if (babMatch) {
+        return {type: "stat", subType: "bab", name: "Base Attack Bonus", value: parseInt(babMatch[1], 10), or};
+    }
+
+    // Exact feat name (skip strings that contain " or " to avoid false matches)
+    const lower = s.toLowerCase();
+    if (!lower.includes(" or ")) {
+        const originalName = featNameMap.get(lower);
+        if (originalName) {
+            return {type: "feat", name: originalName, note: null, or};
+        }
+    }
+
+    return {type: "special", condition: s, or};
+}
+
+/** Normalize one raw node, returning 1-N nodes (>1 only for compound semicolon splits). */
+function normalizeNode(raw: RawPrereqNode, featNameMap: Map<string, string>): NormPrereqNode[] {
+    if (raw.type === "stat") {
+        return [{
+            type: "stat",
+            subType: getStatSubType(raw.name),
+            name: raw.name,
+            value: raw.value,
+            or: normalizeOrChain(raw.or, featNameMap),
+        }];
+    }
+    if (raw.type === "feat") {
+        return [{type: "feat", name: raw.name, note: raw.note, or: normalizeOrChain(raw.or, featNameMap)}];
+    }
+    if (raw.type === "skill") {
+        return [{type: "skill", name: raw.name, rank: raw.rank, or: normalizeOrChain(raw.or, featNameMap)}];
+    }
+    // type === "special"
+    if (raw.condition.includes(";")) {
+        // Compound data-entry error: split into individual conditions.
+        // The or-chain is dropped (these compound entries never have a non-null or).
+        return raw.condition
+            .split(";")
+            // Strip leading "or " fragments — artifacts of improperly merged conditions
+            .map((s) => s.trim().replace(/^or\s+/i, "").trim())
+            .filter(Boolean)
+            .map((segment) => parseCondition(segment, null, featNameMap));
+    }
+    return [parseCondition(raw.condition, normalizeOrChain(raw.or, featNameMap), featNameMap)];
+}
+
+/** Recursively normalize an or-chain. */
+function normalizeOrChain(raw: RawPrereqNode | null, featNameMap: Map<string, string>): NormPrereqNode | null {
+    if (!raw) return null;
+    return normalizeNode(raw, featNameMap)[0] ?? null;
+}
+
+function normalizePrereqData(raw: RawPrereqNode[] | null, featNameMap: Map<string, string>): NormPrereqNode[] {
+    if (!raw || raw.length === 0) return [];
+    return raw.flatMap((node) => normalizeNode(node, featNameMap));
+}
+
+function extractMinBab(nodes: NormPrereqNode[]): number | null {
+    for (const n of nodes) {
+        if (n.type === "stat" && n.subType === "bab") return n.value;
+    }
+    return null;
+}
+
+function extractMinCasterLevel(nodes: NormPrereqNode[]): number | null {
+    for (const n of nodes) {
+        if (n.type === "stat" && n.subType === "caster_level") return n.value;
+    }
+    return null;
+}
+
+function collectFeatPrereqLinks(
+    nodes: NormPrereqNode[],
+): Array<{requiredFeatName: string; note: string | null}> {
+    // We only index the top-level required feats (not or-chain alternates, which
+    // represent optional choices rather than hard requirements).
+    return nodes
+        .filter((n): n is Extract<NormPrereqNode, {type: "feat"}> => n.type === "feat")
+        .map((n) => ({requiredFeatName: n.name, note: n.note}));
 }
 
 function collectDescriptors(spell: SpellEntry): string[] {
@@ -260,7 +417,7 @@ await db.execute(sql`
         domain_subdomains, subdomains, domains,
         spell_classes, spells,
         deities, subschools, schools, classes,
-        feats
+        feat_prerequisites, feats
     RESTART IDENTITY CASCADE
 `);
 console.log("  Done.");
@@ -609,41 +766,82 @@ console.log(`  Mysteries: ${mysteryData.length}`);
 
 console.log("\nPhase 5: Feats...");
 
-const featInsertRows: typeof schema.feats.$inferInsert[] = featData.map((feat) => ({
-    id: ulid(),
-    name: feat.name,
-    types: [...new Set(feat.type.map(normalizeFeatType))],
-    description: feat.description,
-    prerequisites: feat.prerequisites,
-    prerequisiteData: feat.prerequisite_data ?? null,
-    benefit: feat.benefit,
-    normal: feat.normal,
-    special: feat.special,
-    raceName: feat.race_name,
-    note: feat.note,
-    goal: feat.goal,
-    completionBenefit: feat.completion_benefit,
-    source: feat.source,
-    multiples: feat.multiples,
-}));
+// Generate all feat IDs up-front (positional — one ULID per array slot so
+// duplicate-named feats each get a unique ID).
+const featIds: string[] = featData.map(() => ulid());
+
+// Name-lookup maps take only the FIRST occurrence of each lowercase name so
+// that prerequisite cross-references resolve to a stable, unique target.
+const featIdByName = new Map<string, string>();  // lowercase name → ulid of first occurrence
+const featNameMap = new Map<string, string>();   // lowercase name → original-case name (first)
+for (let i = 0; i < featData.length; i++) {
+    const lower = featData[i].name.toLowerCase();
+    if (!featIdByName.has(lower)) {
+        featIdByName.set(lower, featIds[i]);
+        featNameMap.set(lower, featData[i].name);
+    }
+}
+
+const featInsertRows: typeof schema.feats.$inferInsert[] = [];
+const featPrereqRows: typeof schema.featPrerequisites.$inferInsert[] = [];
+
+for (let i = 0; i < featData.length; i++) {
+    const feat = featData[i];
+    const featId = featIds[i];
+    const normPrereqs = normalizePrereqData(feat.prerequisite_data, featNameMap);
+
+    featInsertRows.push({
+        id: featId,
+        name: feat.name,
+        types: [...new Set(feat.type.map(normalizeFeatType))],
+        description: feat.description,
+        prerequisites: feat.prerequisites,
+        prerequisiteData: normPrereqs.length > 0 ? normPrereqs : null,
+        benefit: feat.benefit,
+        normal: feat.normal,
+        special: feat.special,
+        raceName: feat.race_name,
+        note: feat.note,
+        goal: feat.goal,
+        completionBenefit: feat.completion_benefit,
+        source: feat.source,
+        multiples: feat.multiples,
+        minBab: extractMinBab(normPrereqs),
+        minCasterLevel: extractMinCasterLevel(normPrereqs),
+    });
+
+    for (const {requiredFeatName, note} of collectFeatPrereqLinks(normPrereqs)) {
+        const requiredFeatId = featIdByName.get(requiredFeatName.toLowerCase());
+        if (requiredFeatId) {
+            featPrereqRows.push({featId, requiredFeatId, note});
+        }
+    }
+}
 
 await batchInsert("feats", featInsertRows, (batch) =>
     db.insert(schema.feats).values(batch));
+
+if (featPrereqRows.length) {
+    await batchInsert("feat_prerequisites", featPrereqRows, (batch) =>
+        db.insert(schema.featPrerequisites).values(batch).onConflictDoNothing());
+}
 
 // ─── Summary ─────────────────────────────────────────────────────────────────
 
 console.log("\n✓ Seed complete!");
 const counts = await Promise.all([
-    db.select({ count: sql<number>`count(*)` }).from(schema.spells),
-    db.select({ count: sql<number>`count(*)` }).from(schema.feats),
-    db.select({ count: sql<number>`count(*)` }).from(schema.spellClasses),
-    db.select({ count: sql<number>`count(*)` }).from(schema.domains),
-    db.select({ count: sql<number>`count(*)` }).from(schema.mysteries),
+    db.select({count: sql<number>`count(*)`}).from(schema.spells),
+    db.select({count: sql<number>`count(*)`}).from(schema.feats),
+    db.select({count: sql<number>`count(*)`}).from(schema.featPrerequisites),
+    db.select({count: sql<number>`count(*)`}).from(schema.spellClasses),
+    db.select({count: sql<number>`count(*)`}).from(schema.domains),
+    db.select({count: sql<number>`count(*)`}).from(schema.mysteries),
 ]);
-console.log(`  Spells:        ${counts[0][0].count}`);
-console.log(`  Feats:         ${counts[1][0].count}`);
-console.log(`  Spell-classes: ${counts[2][0].count}`);
-console.log(`  Domains:       ${counts[3][0].count}`);
-console.log(`  Mysteries:     ${counts[4][0].count}`);
+console.log(`  Spells:             ${counts[0][0].count}`);
+console.log(`  Feats:              ${counts[1][0].count}`);
+console.log(`  Feat prereq edges:  ${counts[2][0].count}`);
+console.log(`  Spell-classes:      ${counts[3][0].count}`);
+console.log(`  Domains:            ${counts[4][0].count}`);
+console.log(`  Mysteries:          ${counts[5][0].count}`);
 
 await client.end();

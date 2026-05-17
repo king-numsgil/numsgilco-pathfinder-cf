@@ -251,7 +251,7 @@ export const feats = pgTable("feats", {
     types: text("types").array().notNull().default([]),
     description: text("description").notNull(),
     prerequisites: text("prerequisites"),
-    // Structured prerequisite data (typed tree with OR chaining) stored as JSONB
+    // Structured prerequisite data — normalized at seed time (see db/seed.ts)
     prerequisiteData: jsonb("prerequisite_data"),
     benefit: text("benefit").notNull(),
     normal: text("normal"),
@@ -262,7 +262,22 @@ export const feats = pgTable("feats", {
     completionBenefit: text("completion_benefit"),
     source: text("source").notNull(),
     multiples: boolean("multiples").notNull().default(false),
+    // Denormalized from prerequisite_data for efficient numeric filtering
+    minBab: smallint("min_bab"),
+    minCasterLevel: smallint("min_caster_level"),
 });
+
+// Feat → Feat prerequisite graph (flat; one row per required-feat edge)
+export const featPrerequisites = pgTable(
+    "feat_prerequisites",
+    {
+        featId: text("feat_id").notNull().references(() => feats.id),
+        requiredFeatId: text("required_feat_id").notNull().references(() => feats.id),
+        // Parameterization note, e.g. "conjuration" for "Spell Focus: conjuration"
+        note: text("note"),
+    },
+    (t) => [primaryKey({columns: [t.featId, t.requiredFeatId]})],
+);
 
 // ─── Relations ────────────────────────────────────────────────────────────────
 
@@ -372,12 +387,33 @@ export const subdomainSpellsRelations = relations(subdomainSpells, ({one}) => ({
     spell: one(spells, {fields: [subdomainSpells.spellId], references: [spells.id]}),
 }));
 
+export const featsRelations = relations(feats, ({many}) => ({
+    // Edges where this feat IS the dependent (it requires others)
+    prerequisiteLinks: many(featPrerequisites, {relationName: "feat_requires"}),
+    // Edges where this feat IS the requirement (others need it)
+    dependentLinks: many(featPrerequisites, {relationName: "feat_required_by"}),
+}));
+
+export const featPrerequisitesRelations = relations(featPrerequisites, ({one}) => ({
+    feat: one(feats, {
+        fields: [featPrerequisites.featId],
+        references: [feats.id],
+        relationName: "feat_requires",
+    }),
+    requiredFeat: one(feats, {
+        fields: [featPrerequisites.requiredFeatId],
+        references: [feats.id],
+        relationName: "feat_required_by",
+    }),
+}));
+
 // ─── Inferred types ──────────────────────────────────────────────────────────
 
 export type Spell = typeof spells.$inferSelect;
 export type NewSpell = typeof spells.$inferInsert;
 export type Feat = typeof feats.$inferSelect;
 export type NewFeat = typeof feats.$inferInsert;
+export type FeatPrerequisite = typeof featPrerequisites.$inferSelect;
 export type Class = typeof classes.$inferSelect;
 export type School = typeof schools.$inferSelect;
 export type Domain = typeof domains.$inferSelect;
