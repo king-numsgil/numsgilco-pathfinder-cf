@@ -137,6 +137,13 @@ const SpellContent: FC<{
         };
     }, [id]);
 
+    useEffect(() => {
+        if (!spell) return;
+        const prev = document.title;
+        document.title = `${spell.name} — Pathfinder 1E`;
+        return () => { document.title = prev; };
+    }, [spell]);
+
     if (loading) {
         return <Center py="xl"><Loader/></Center>;
     }

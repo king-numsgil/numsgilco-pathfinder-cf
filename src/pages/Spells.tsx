@@ -213,6 +213,7 @@ export const Spells: FC = () => {
     const initialLoading = !hasLoaded;
 
     return <Stack gap="lg">
+        <title>Spells — Pathfinder 1E</title>
         <div>
             <Title order={2}>Spells</Title>
             <Text size="sm" c="dimmed" mt={4}>

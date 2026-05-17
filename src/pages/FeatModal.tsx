@@ -53,6 +53,13 @@ const FeatContent: FC<{ id: string }> = ({id}) => {
         };
     }, [id]);
 
+    useEffect(() => {
+        if (!feat) return;
+        const prev = document.title;
+        document.title = `${feat.name} — Pathfinder 1E`;
+        return () => { document.title = prev; };
+    }, [feat]);
+
     if (loading) {
         return <Center py="xl"><Loader/></Center>;
     }

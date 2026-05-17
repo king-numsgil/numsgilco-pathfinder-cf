@@ -23,6 +23,7 @@ const features = [
 
 export const Home: FC = () => {
     return <Stack gap="xl" maw={960}>
+        <title>Pathfinder 1E</title>
         <div>
             <Group gap="xs" mb={4}>
                 <Badge variant="light" color="teal" size="sm" tt="uppercase" style={{letterSpacing: "0.08em"}}>

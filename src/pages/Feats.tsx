@@ -137,6 +137,7 @@ export const Feats: FC = () => {
     const initialLoading = !hasLoaded;
 
     return <Stack gap="lg">
+        <title>Feats — Pathfinder 1E</title>
         <div>
             <Title order={2}>Feats</Title>
             <Text size="sm" c="dimmed" mt={4}>
