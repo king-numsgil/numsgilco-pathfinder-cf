@@ -1,5 +1,7 @@
+import { zValidator } from "@hono/zod-validator";
 import { and, asc, count, eq, exists, ilike, inArray, or, sql, type SQL } from "drizzle-orm";
 import { Hono } from "hono";
+import { z } from "zod";
 import { createDb } from "../db";
 import * as s from "../db/schema";
 
@@ -131,29 +133,53 @@ function buildWhere(
     return filters.length > 0 ? and(...filters) : undefined;
 }
 
+// ─── Query schema ─────────────────────────────────────────────────────────────
+
+export const spellsQuerySchema = z.object({
+    q: z.string().optional(),
+    level: z.string().optional(),
+    school: z.string().optional(),
+    subschool: z.string().optional(),
+    descriptor: z.string().optional(),
+    class: z.string().optional(),
+    domain: z.string().optional(),
+    subdomain: z.string().optional(),
+    bloodline: z.string().optional(),
+    patron: z.string().optional(),
+    mystery: z.string().optional(),
+    limit: z.string().optional(),
+    offset: z.string().optional(),
+});
+
 // ─── Routes ───────────────────────────────────────────────────────────────────
 
 const app = new Hono<HonoEnv>()
-    .get("/", async (c) => {
+    .get("/", zValidator("query", spellsQuerySchema), async (c) => {
         const db = createDb(c.env.HYPERDRIVE.connectionString);
 
-        const rawLimit = parseInt(c.req.query("limit") ?? "50", 10);
-        const rawOffset = parseInt(c.req.query("offset") ?? "0", 10);
-        const limit = Math.min(isNaN(rawLimit) ? 50 : rawLimit, 200);
-        const offset = isNaN(rawOffset) ? 0 : rawOffset;
+        const {
+            q,
+            level, school, subschool, descriptor,
+            class: classParam,
+            domain, subdomain, bloodline, patron, mystery,
+            limit: rawLimit, offset: rawOffset,
+        } = c.req.valid("query");
+
+        const limit = Math.min(parseInt(rawLimit ?? "50", 10) || 50, 200);
+        const offset = parseInt(rawOffset ?? "0", 10) || 0;
 
         const searchParams = {
-            q: c.req.query("q"),
-            levels: parseLevels(c.req.query("level")),
-            classIds: parseIds(c.req.query("class")),
-            domainIds: parseIds(c.req.query("domain")),
-            subdomainIds: parseIds(c.req.query("subdomain")),
-            schoolIds: parseIds(c.req.query("school")),
-            subschoolIds: parseIds(c.req.query("subschool")),
-            descriptors: parseIds(c.req.query("descriptor")),
-            bloodlineIds: parseIds(c.req.query("bloodline")),
-            patronIds: parseIds(c.req.query("patron")),
-            mysteryIds: parseIds(c.req.query("mystery")),
+            q,
+            levels: parseLevels(level),
+            classIds: parseIds(classParam),
+            domainIds: parseIds(domain),
+            subdomainIds: parseIds(subdomain),
+            schoolIds: parseIds(school),
+            subschoolIds: parseIds(subschool),
+            descriptors: parseIds(descriptor),
+            bloodlineIds: parseIds(bloodline),
+            patronIds: parseIds(patron),
+            mysteryIds: parseIds(mystery),
         };
 
         const where = buildWhere(db, searchParams);

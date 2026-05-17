@@ -123,8 +123,8 @@ export const Spells: FC = () => {
                     bloodline: bloodlineKey || undefined,
                     patron: patronKey || undefined,
                     mystery: mysteryKey || undefined,
-                    limit: PAGE_SIZE,
-                    offset: 0,
+                    limit: String(PAGE_SIZE),
+                    offset: "0",
                 });
                 if (seq !== fetchSeq.current) {
                     return;
@@ -181,8 +181,8 @@ export const Spells: FC = () => {
                     bloodline: bloodlineKey || undefined,
                     patron: patronKey || undefined,
                     mystery: mysteryKey || undefined,
-                    limit: PAGE_SIZE,
-                    offset: results.length,
+                    limit: String(PAGE_SIZE),
+                    offset: String(results.length),
                 }).then((data) => {
                     if (loadMoreSeq.current !== myLmSeq) {
                         return;

@@ -1,4 +1,4 @@
-import { Anchor, Badge, Center, Divider, Group, Loader, Modal, Paper, ScrollArea, SimpleGrid, Stack, Text } from "@mantine/core";
+import { Badge, Center, Divider, Group, Loader, Modal, Paper, ScrollArea, SimpleGrid, Stack, Text } from "@mantine/core";
 import { type FC, useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { fetchFeat, type FeatDetail } from "../api";
@@ -73,21 +73,28 @@ const FeatContent: FC<{id: string}> = ({id}) => {
         {feat.requires.length > 0 && (
             <>
                 <Divider/>
-                <Stack gap={6}>
-                    <Text size="xs" tt="uppercase" fw={700} c="dimmed" style={{letterSpacing: "0.06em"}}>
-                        Requires
-                    </Text>
-                    <Group gap={6} wrap="wrap">
-                        {feat.requires.map((r) => (
-                            <Anchor
-                                key={r.id}
-                                size="sm"
-                                onClick={() => navigate(`/feats/${r.id}`)}
-                            >
-                                {r.name}{r.note ? ` (${r.note})` : ""}
-                            </Anchor>
-                        ))}
+                <Stack gap={8}>
+                    <Group gap="xs" align="baseline">
+                        <Text size="xs" tt="uppercase" fw={700} c="dimmed" style={{letterSpacing: "0.06em"}}>
+                            Requires
+                        </Text>
+                        <Text size="xs" c="dimmed">({feat.requires.length})</Text>
                     </Group>
+                    <SimpleGrid cols={{base: 2, xs: 3}} spacing={6}>
+                        {feat.requires.map((r) => (
+                            <Paper
+                                key={r.id}
+                                withBorder
+                                p="xs"
+                                onClick={() => navigate(`/feats/${r.id}`)}
+                                style={{cursor: "pointer"}}
+                            >
+                                <Text size="xs" fw={500} c="teal.4" lineClamp={2} lh={1.35}>
+                                    {r.name}{r.note ? ` (${r.note})` : ""}
+                                </Text>
+                            </Paper>
+                        ))}
+                    </SimpleGrid>
                 </Stack>
             </>
         )}

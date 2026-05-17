@@ -1,5 +1,5 @@
 import { hc } from "hono/client";
-import type { InferResponseType } from "hono/client";
+import type { InferRequestType, InferResponseType } from "hono/client";
 import type { AppType } from "../../worker";
 
 const client = hc<AppType>(window.location.origin);
@@ -9,41 +9,17 @@ const client = hc<AppType>(window.location.origin);
 
 export type LookupItem = InferResponseType<typeof client.api.schools.$get>[number];
 export type DomainWithSubdomains = InferResponseType<typeof client.api.domains.$get>[number];
-export type SpellListResponse = InferResponseType<typeof client.api.spells.$get>;
+export type SpellListResponse = InferResponseType<typeof client.api.spells.$get, 200>;
 export type SpellListItem = SpellListResponse["data"][number];
 export type SpellDetail = InferResponseType<(typeof client.api.spells)[":id"]["$get"], 200>;
-export type FeatListResponse = InferResponseType<typeof client.api.feats.$get>;
+export type FeatListResponse = InferResponseType<typeof client.api.feats.$get, 200>;
 export type FeatListItem = FeatListResponse["data"][number];
 export type FeatDetail = InferResponseType<(typeof client.api.feats)[":id"]["$get"], 200>;
 
-// ─── Request params ───────────────────────────────────────────────────────────
-// Defined manually: the worker routes use ad-hoc c.req.query() without Zod
-// validators, so InferRequestType has nothing to derive from.
+// ─── Request params (derived from route Zod schemas via InferRequestType) ─────
 
-export type FeatSearchParams = {
-    q?: string;
-    type?: string;
-    maxBab?: number;
-    maxCl?: number;
-    limit?: number;
-    offset?: number;
-};
-
-export type SpellSearchParams = {
-    q?: string;
-    level?: string;
-    class?: string;
-    domain?: string;
-    subdomain?: string;
-    school?: string;
-    subschool?: string;
-    descriptor?: string;
-    bloodline?: string;
-    patron?: string;
-    mystery?: string;
-    limit?: number;
-    offset?: number;
-};
+export type SpellSearchParams = InferRequestType<typeof client.api.spells.$get>["query"];
+export type FeatSearchParams = InferRequestType<typeof client.api.feats.$get>["query"];
 
 // ─── Fetch helpers ────────────────────────────────────────────────────────────
 
@@ -96,22 +72,7 @@ export async function fetchDescriptors(): Promise<string[]> {
 }
 
 export async function fetchSpells(params: SpellSearchParams): Promise<SpellListResponse> {
-    const query: Record<string, string> = {};
-    if (params.q) query.q = params.q;
-    if (params.level) query.level = params.level;
-    if (params.school) query.school = params.school;
-    if (params.subschool) query.subschool = params.subschool;
-    if (params.descriptor) query.descriptor = params.descriptor;
-    if (params.class) query.class = params.class;
-    if (params.domain) query.domain = params.domain;
-    if (params.subdomain) query.subdomain = params.subdomain;
-    if (params.bloodline) query.bloodline = params.bloodline;
-    if (params.patron) query.patron = params.patron;
-    if (params.mystery) query.mystery = params.mystery;
-    if (params.limit !== undefined) query.limit = String(params.limit);
-    if (params.offset !== undefined) query.offset = String(params.offset);
-
-    const res = await client.api.spells.$get({query});
+    const res = await client.api.spells.$get({query: params});
     if (!res.ok) throw new Error("Failed to fetch spells");
     return res.json();
 }
@@ -130,15 +91,7 @@ export async function fetchFeatTypes(): Promise<string[]> {
 }
 
 export async function fetchFeats(params: FeatSearchParams): Promise<FeatListResponse> {
-    const query: Record<string, string> = {};
-    if (params.q) query.q = params.q;
-    if (params.type) query.type = params.type;
-    if (params.maxBab !== undefined) query.maxBab = String(params.maxBab);
-    if (params.maxCl !== undefined) query.maxCl = String(params.maxCl);
-    if (params.limit !== undefined) query.limit = String(params.limit);
-    if (params.offset !== undefined) query.offset = String(params.offset);
-
-    const res = await client.api.feats.$get({query});
+    const res = await client.api.feats.$get({query: params});
     if (!res.ok) throw new Error("Failed to fetch feats");
     return res.json();
 }

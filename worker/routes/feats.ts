@@ -1,5 +1,7 @@
+import { zValidator } from "@hono/zod-validator";
 import { and, asc, count, eq, ilike, or, sql, type SQL } from "drizzle-orm";
 import { Hono } from "hono";
+import { z } from "zod";
 import { createDb } from "../db";
 import * as s from "../db/schema";
 
@@ -49,25 +51,34 @@ function buildWhere(params: {
     return filters.length > 0 ? and(...filters) : undefined;
 }
 
+// ─── Query schema ─────────────────────────────────────────────────────────────
+
+export const featsQuerySchema = z.object({
+    q: z.string().optional(),
+    type: z.string().optional(),
+    maxBab: z.string().optional(),
+    maxCl: z.string().optional(),
+    limit: z.string().optional(),
+    offset: z.string().optional(),
+});
+
 // ─── Routes ───────────────────────────────────────────────────────────────────
 
 const app = new Hono<HonoEnv>()
-    .get("/", async (c) => {
+    .get("/", zValidator("query", featsQuerySchema), async (c) => {
         const db = createDb(c.env.HYPERDRIVE.connectionString);
+        const {q, type, maxBab: rawMaxBab, maxCl: rawMaxCl, limit: rawLimit, offset: rawOffset} = c.req.valid("query");
 
-        const rawLimit = parseInt(c.req.query("limit") ?? "50", 10);
-        const rawOffset = parseInt(c.req.query("offset") ?? "0", 10);
-        const limit = Math.min(isNaN(rawLimit) ? 50 : rawLimit, 200);
-        const offset = isNaN(rawOffset) ? 0 : rawOffset;
-
-        const rawMaxBab = c.req.query("maxBab");
-        const rawMaxCl = c.req.query("maxCl");
+        const limit = Math.min(parseInt(rawLimit ?? "50", 10) || 50, 200);
+        const offset = parseInt(rawOffset ?? "0", 10) || 0;
+        const maxBab = rawMaxBab !== undefined ? parseInt(rawMaxBab, 10) : undefined;
+        const maxCl = rawMaxCl !== undefined ? parseInt(rawMaxCl, 10) : undefined;
 
         const params = {
-            q: c.req.query("q"),
-            types: parseIds(c.req.query("type")),
-            maxBab: rawMaxBab !== undefined ? parseInt(rawMaxBab, 10) : undefined,
-            maxCl: rawMaxCl !== undefined ? parseInt(rawMaxCl, 10) : undefined,
+            q,
+            types: parseIds(type),
+            maxBab,
+            maxCl,
         };
 
         const where = buildWhere(params);

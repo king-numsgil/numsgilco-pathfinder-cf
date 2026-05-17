@@ -47,18 +47,15 @@ export const Feats: FC = () => {
         ++loadMoreSeq.current;
         isLoadingMoreRef.current = false;
 
-        const maxBab = filters.maxBab !== "" ? Number(filters.maxBab) : undefined;
-        const maxCl = filters.maxCl !== "" ? Number(filters.maxCl) : undefined;
-
         startTransition(async () => {
             try {
                 const data = await fetchFeats({
                     q: debouncedSearch || undefined,
                     type: typeKey || undefined,
-                    maxBab,
-                    maxCl,
-                    limit: PAGE_SIZE,
-                    offset: 0,
+                    maxBab: filters.maxBab || undefined,
+                    maxCl: filters.maxCl || undefined,
+                    limit: String(PAGE_SIZE),
+                    offset: "0",
                 });
                 if (seq !== fetchSeq.current) return;
                 setResults(data.data);
@@ -79,8 +76,6 @@ export const Feats: FC = () => {
         if (!sentinel || !hasLoaded || isPending || results.length >= total) return;
 
         const myLmSeq = loadMoreSeq.current;
-        const maxBab = filters.maxBab !== "" ? Number(filters.maxBab) : undefined;
-        const maxCl = filters.maxCl !== "" ? Number(filters.maxCl) : undefined;
 
         const observer = new IntersectionObserver(
             (entries) => {
@@ -93,10 +88,10 @@ export const Feats: FC = () => {
                 fetchFeats({
                     q: debouncedSearch || undefined,
                     type: typeKey || undefined,
-                    maxBab,
-                    maxCl,
-                    limit: PAGE_SIZE,
-                    offset: results.length,
+                    maxBab: filters.maxBab || undefined,
+                    maxCl: filters.maxCl || undefined,
+                    limit: String(PAGE_SIZE),
+                    offset: String(results.length),
                 }).then((data) => {
                     if (loadMoreSeq.current !== myLmSeq) return;
                     setResults((prev) => [...prev, ...data.data]);
