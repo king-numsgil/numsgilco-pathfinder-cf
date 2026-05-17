@@ -1,18 +1,7 @@
-import {
-    Badge,
-    Center,
-    Divider,
-    Group,
-    Loader,
-    Modal,
-    ScrollArea,
-    SimpleGrid,
-    Stack,
-    Text,
-} from "@mantine/core";
-import { useEffect, useState } from "react";
+import { Badge, Center, Divider, Group, Loader, Modal, ScrollArea, SimpleGrid, Stack, Text } from "@mantine/core";
+import { type FC, useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { type SpellDetail, fetchSpell } from "../api";
+import { fetchSpell, type SpellDetail } from "../api";
 
 const schoolColors: Record<string, string> = {
     Abjuration: "blue",
@@ -28,33 +17,50 @@ const schoolColors: Record<string, string> = {
 
 function formatComponents(c: SpellDetail["components"]): string {
     const parts: string[] = [];
-    if (c.verbal) parts.push("V");
-    if (c.somatic) parts.push("S");
-    if (c.material) parts.push(c.cost ? `M (${c.cost} gp)` : "M");
-    if (c.focus) parts.push("F");
-    if (c.divineFocus) parts.push("DF");
+    if (c.verbal) {
+        parts.push("V");
+    }
+    if (c.somatic) {
+        parts.push("S");
+    }
+    if (c.material) {
+        parts.push(c.cost ? `M (${c.cost} gp)` : "M");
+    }
+    if (c.focus) {
+        parts.push("F");
+    }
+    if (c.divineFocus) {
+        parts.push("DF");
+    }
     return parts.join(", ") || "—";
 }
 
-function StatBlock({ label, value }: { label: string; value: string | null | undefined }) {
-    if (!value) return null;
-    return (
-        <Stack gap={2}>
-            <Text size="xs" tt="uppercase" fw={700} c="dimmed" style={{ letterSpacing: "0.06em" }}>
-                {label}
-            </Text>
-            <Text size="sm">{value}</Text>
-        </Stack>
-    );
-}
+const StatBlock: FC<{
+    label: string;
+    value: string | null | undefined;
+}> = ({label, value}) => {
+    if (!value) {
+        return null;
+    }
+    return <Stack gap={2}>
+        <Text size="xs" tt="uppercase" fw={700} c="dimmed" style={{letterSpacing: "0.06em"}}>
+            {label}
+        </Text>
+        <Text size="sm">{value}</Text>
+    </Stack>;
+};
 
-function LevelSection({ spell }: { spell: SpellDetail }) {
+const LevelSection: FC<{
+    spell: SpellDetail;
+}> = ({spell}) => {
     const entries: string[] = [];
 
     if (spell.classes.length) {
         const byLevel = new Map<number, string[]>();
         for (const c of spell.classes) {
-            if (!byLevel.has(c.level)) byLevel.set(c.level, []);
+            if (!byLevel.has(c.level)) {
+                byLevel.set(c.level, []);
+            }
             byLevel.get(c.level)!.push(c.name);
         }
         const sorted = [...byLevel.entries()].sort(([a], [b]) => a - b);
@@ -90,23 +96,25 @@ function LevelSection({ spell }: { spell: SpellDetail }) {
         entries.push(`Mystery — ${parts}`);
     }
 
-    if (entries.length === 0) return null;
+    if (entries.length === 0) {
+        return null;
+    }
 
-    return (
-        <Stack gap={4}>
-            <Text size="xs" tt="uppercase" fw={700} c="dimmed" style={{ letterSpacing: "0.06em" }}>
-                Level
-            </Text>
-            {entries.map((e) => (
-                <Text key={e} size="sm">{e}</Text>
-            ))}
-        </Stack>
-    );
-}
+    return <Stack gap={4}>
+        <Text size="xs" tt="uppercase" fw={700} c="dimmed" style={{letterSpacing: "0.06em"}}>
+            Level
+        </Text>
+        {entries.map((e) => (
+            <Text key={e} size="sm">{e}</Text>
+        ))}
+    </Stack>;
+};
 
 // Keyed by spell ID so it always starts with fresh (loading) state.
 // This avoids the need to synchronously call setState in an effect.
-function SpellContent({ id }: { id: string }) {
+const SpellContent: FC<{
+    id: string;
+}> = ({id}) => {
     const [spell, setSpell] = useState<SpellDetail | null>(null);
     const [error, setError] = useState<string | null>(null);
     const loading = spell === null && error === null;
@@ -114,134 +122,143 @@ function SpellContent({ id }: { id: string }) {
     useEffect(() => {
         let active = true;
         fetchSpell(id)
-            .then((data) => { if (active) setSpell(data); })
-            .catch((e: Error) => { if (active) setError(e.message); });
-        return () => { active = false; };
+            .then((data) => {
+                if (active) {
+                    setSpell(data);
+                }
+            })
+            .catch((e: Error) => {
+                if (active) {
+                    setError(e.message);
+                }
+            });
+        return () => {
+            active = false;
+        };
     }, [id]);
 
-    if (loading) return <Center py="xl"><Loader /></Center>;
-    if (error) return <Text c="red" ta="center" py="xl">{error}</Text>;
-    if (!spell) return null;
+    if (loading) {
+        return <Center py="xl"><Loader/></Center>;
+    }
+    if (error) {
+        return <Text c="red" ta="center" py="xl">{error}</Text>;
+    }
+    if (!spell) {
+        return null;
+    }
 
     const schoolName = spell.school?.name ?? null;
 
-    return (
-        <Stack gap="md">
-            <Text fw={700} size="xl">{spell.name}</Text>
+    return <Stack gap="md">
+        <Text fw={700} size="xl">{spell.name}</Text>
 
-            {/* School + subschool + descriptors */}
-            <Group gap="xs" wrap="wrap">
-                {schoolName && (
-                    <Badge color={schoolColors[schoolName] ?? "gray"} variant="filled" size="md">
-                        {schoolName}
-                        {spell.subschool ? ` (${spell.subschool.name})` : ""}
-                    </Badge>
-                )}
-                {spell.descriptors.map((d) => (
-                    <Badge key={d} variant="outline" color="gray" size="sm">{d}</Badge>
-                ))}
-                {spell.deity && (
-                    <Badge variant="light" color="yellow" size="sm">{spell.deity.name}</Badge>
-                )}
-            </Group>
-
-            {/* Casting stats */}
-            <SimpleGrid cols={{ base: 2, sm: 3 }} spacing="md">
-                <StatBlock label="Casting Time" value={spell.castingTime} />
-                <StatBlock label="Components"   value={formatComponents(spell.components)} />
-                <StatBlock label="Range"        value={spell.range} />
-                {spell.area    && <StatBlock label="Area"    value={spell.area} />}
-                {spell.effect  && <StatBlock label="Effect"  value={spell.effect} />}
-                {spell.targets && <StatBlock label="Targets" value={spell.targets} />}
-                <StatBlock label="Duration"     value={spell.duration} />
-                <StatBlock label="Saving Throw" value={spell.savingThrow} />
-                <StatBlock label="Spell Resist" value={spell.spellResistance} />
-            </SimpleGrid>
-
-            <Divider />
-
-            <LevelSection spell={spell} />
-
-            <Divider />
-
-            <Text size="sm" style={{ lineHeight: 1.7 }}>{spell.description}</Text>
-
-            {spell.mythicText && (
-                <>
-                    <Divider label="Mythic" labelPosition="left" />
-                    <Text size="sm" style={{ lineHeight: 1.7 }}>{spell.mythicText}</Text>
-                </>
+        {/* School + subschool + descriptors */}
+        <Group gap="xs" wrap="wrap">
+            {schoolName && (
+                <Badge color={schoolColors[schoolName] ?? "gray"} variant="filled" size="md">
+                    {schoolName}
+                    {spell.subschool ? ` (${spell.subschool.name})` : ""}
+                </Badge>
             )}
-            {spell.augmented && (
-                <>
-                    <Divider label="Augmented" labelPosition="left" />
-                    <Text size="sm" style={{ lineHeight: 1.7 }}>{spell.augmented}</Text>
-                </>
+            {spell.descriptors.map((d) => (
+                <Badge key={d} variant="outline" color="gray" size="sm">{d}</Badge>
+            ))}
+            {spell.deity && (
+                <Badge variant="light" color="yellow" size="sm">{spell.deity.name}</Badge>
             )}
+        </Group>
 
-            {(spell.permanency || spell.slaLevel || spell.race) && (
-                <>
-                    <Divider />
-                    <Group gap="xl">
-                        {spell.permanency && (
-                            <Stack gap={2}>
-                                <Text size="xs" tt="uppercase" fw={700} c="dimmed" style={{ letterSpacing: "0.06em" }}>
-                                    Permanency
-                                </Text>
-                                <Text size="sm">
-                                    CL {spell.permanency.cl ?? "—"}
-                                    {spell.permanency.cost ? `, ${spell.permanency.cost} gp` : ""}
-                                </Text>
-                            </Stack>
-                        )}
-                        {spell.slaLevel !== null && (
-                            <Stack gap={2}>
-                                <Text size="xs" tt="uppercase" fw={700} c="dimmed" style={{ letterSpacing: "0.06em" }}>
-                                    SLA Level
-                                </Text>
-                                <Text size="sm">{spell.slaLevel}</Text>
-                            </Stack>
-                        )}
-                        {spell.race && (
-                            <Stack gap={2}>
-                                <Text size="xs" tt="uppercase" fw={700} c="dimmed" style={{ letterSpacing: "0.06em" }}>
-                                    Race
-                                </Text>
-                                <Text size="sm">{spell.race}</Text>
-                            </Stack>
-                        )}
-                    </Group>
-                </>
+        {/* Casting stats */}
+        <SimpleGrid cols={{base: 2, sm: 3}} spacing="md">
+            <StatBlock label="Casting Time" value={spell.castingTime}/>
+            <StatBlock label="Components" value={formatComponents(spell.components)}/>
+            <StatBlock label="Range" value={spell.range}/>
+            {spell.area && <StatBlock label="Area" value={spell.area}/>}
+            {spell.effect && <StatBlock label="Effect" value={spell.effect}/>}
+            {spell.targets && <StatBlock label="Targets" value={spell.targets}/>}
+            <StatBlock label="Duration" value={spell.duration}/>
+            <StatBlock label="Saving Throw" value={spell.savingThrow}/>
+            <StatBlock label="Spell Resist" value={spell.spellResistance}/>
+        </SimpleGrid>
+
+        <Divider/>
+        <LevelSection spell={spell}/>
+        <Divider/>
+        <Text size="sm" style={{lineHeight: 1.7}}>{spell.description}</Text>
+
+        {spell.mythicText && (
+            <>
+                <Divider label="Mythic" labelPosition="left"/>
+                <Text size="sm" style={{lineHeight: 1.7}}>{spell.mythicText}</Text>
+            </>
+        )}
+        {spell.augmented && (
+            <>
+                <Divider label="Augmented" labelPosition="left"/>
+                <Text size="sm" style={{lineHeight: 1.7}}>{spell.augmented}</Text>
+            </>
+        )}
+
+        {(spell.permanency || spell.slaLevel || spell.race) && (
+            <>
+                <Divider/>
+                <Group gap="xl">
+                    {spell.permanency && (
+                        <Stack gap={2}>
+                            <Text size="xs" tt="uppercase" fw={700} c="dimmed" style={{letterSpacing: "0.06em"}}>
+                                Permanency
+                            </Text>
+                            <Text size="sm">
+                                CL {spell.permanency.cl ?? "—"}
+                                {spell.permanency.cost ? `, ${spell.permanency.cost} gp` : ""}
+                            </Text>
+                        </Stack>
+                    )}
+                    {spell.slaLevel !== null && (
+                        <Stack gap={2}>
+                            <Text size="xs" tt="uppercase" fw={700} c="dimmed" style={{letterSpacing: "0.06em"}}>
+                                SLA Level
+                            </Text>
+                            <Text size="sm">{spell.slaLevel}</Text>
+                        </Stack>
+                    )}
+                    {spell.race && (
+                        <Stack gap={2}>
+                            <Text size="xs" tt="uppercase" fw={700} c="dimmed" style={{letterSpacing: "0.06em"}}>
+                                Race
+                            </Text>
+                            <Text size="sm">{spell.race}</Text>
+                        </Stack>
+                    )}
+                </Group>
+            </>
+        )}
+
+        <Text size="xs" c="dimmed" ta="right">
+            Source: {spell.sourcebook}
+            {spell.link && (
+                <> · <a href={spell.link} target="_blank" rel="noreferrer" style={{color: "inherit"}}>AoN ↗</a></>
             )}
+        </Text>
+    </Stack>;
+};
 
-            <Text size="xs" c="dimmed" ta="right">
-                Source: {spell.sourcebook}
-                {spell.link && (
-                    <> · <a href={spell.link} target="_blank" rel="noreferrer" style={{ color: "inherit" }}>AoN ↗</a></>
-                )}
-            </Text>
-        </Stack>
-    );
-}
-
-export function SpellModal() {
-    const { id } = useParams<{ id: string }>();
+export const SpellModal: FC = () => {
+    const {id} = useParams<{ id: string }>();
     const navigate = useNavigate();
     const [opened, setOpened] = useState(true);
 
-    return (
-        <Modal
-            opened={opened}
-            onClose={() => setOpened(false)}
-            transitionProps={{ onExited: () => navigate("/spells") }}
-            title={null}
-            size="xl"
-            scrollAreaComponent={ScrollArea.Autosize}
-        >
-            {/* key={id} forces a fresh SpellContent mount for each spell,
-                so loading state is always derived (spell===null) rather than
-                reset synchronously in an effect. */}
-            {id && <SpellContent key={id} id={id} />}
-        </Modal>
-    );
-}
+    return <Modal
+        opened={opened}
+        onClose={() => setOpened(false)}
+        transitionProps={{onExited: () => navigate("/spells")}}
+        title={null}
+        size="xl"
+        scrollAreaComponent={ScrollArea.Autosize}
+    >
+        {/* key={id} forces a fresh SpellContent mount for each spell,
+            so loading state is always derived (spell===null) rather than
+            reset synchronously in an effect. */}
+        {id && <SpellContent key={id} id={id}/>}
+    </Modal>;
+};

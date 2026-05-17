@@ -1,5 +1,5 @@
-import { Hono } from "hono";
 import { asc } from "drizzle-orm";
+import { Hono } from "hono";
 import { createDb } from "../db";
 import * as s from "../db/schema";
 
@@ -56,8 +56,8 @@ app.get("/domains", async (c) => {
         orderBy: asc(s.domains.name),
         with: {
             domainSubdomains: {
-                with: { subdomain: true },
-                orderBy: (ds, { asc: a }) => [a(ds.subdomainId)],
+                with: {subdomain: true},
+                orderBy: (ds, {asc: a}) => [a(ds.subdomainId)],
             },
         },
     });

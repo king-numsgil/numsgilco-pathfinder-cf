@@ -1,13 +1,5 @@
 import { relations } from "drizzle-orm";
-import {
-    boolean,
-    integer,
-    jsonb,
-    pgTable,
-    primaryKey,
-    smallint,
-    text,
-} from "drizzle-orm/pg-core";
+import { boolean, integer, jsonb, pgTable, primaryKey, smallint, text } from "drizzle-orm/pg-core";
 
 // ─── Lookup tables ────────────────────────────────────────────────────────────
 
@@ -53,7 +45,7 @@ export const domainSubdomains = pgTable(
             .notNull()
             .references(() => subdomains.id),
     },
-    (t) => [primaryKey({ columns: [t.domainId, t.subdomainId] })],
+    (t) => [primaryKey({columns: [t.domainId, t.subdomainId]})],
 );
 
 export const domainDeities = pgTable(
@@ -66,7 +58,7 @@ export const domainDeities = pgTable(
             .notNull()
             .references(() => deities.id),
     },
-    (t) => [primaryKey({ columns: [t.domainId, t.deityId] })],
+    (t) => [primaryKey({columns: [t.domainId, t.deityId]})],
 );
 
 export const subdomainDeities = pgTable(
@@ -79,7 +71,7 @@ export const subdomainDeities = pgTable(
             .notNull()
             .references(() => deities.id),
     },
-    (t) => [primaryKey({ columns: [t.subdomainId, t.deityId] })],
+    (t) => [primaryKey({columns: [t.subdomainId, t.deityId]})],
 );
 
 // ─── Bloodlines & Patrons ─────────────────────────────────────────────────────
@@ -111,7 +103,7 @@ export const mysteryDeities = pgTable(
             .notNull()
             .references(() => deities.id),
     },
-    (t) => [primaryKey({ columns: [t.mysteryId, t.deityId] })],
+    (t) => [primaryKey({columns: [t.mysteryId, t.deityId]})],
 );
 
 // ─── Spells ───────────────────────────────────────────────────────────────────
@@ -171,7 +163,7 @@ export const spellClasses = pgTable(
             .references(() => classes.id),
         level: smallint("level").notNull(),
     },
-    (t) => [primaryKey({ columns: [t.spellId, t.classId] })],
+    (t) => [primaryKey({columns: [t.spellId, t.classId]})],
 );
 
 // Spell ↔ Domain (with spell level)
@@ -186,7 +178,7 @@ export const domainSpells = pgTable(
             .references(() => domains.id),
         level: smallint("level").notNull(),
     },
-    (t) => [primaryKey({ columns: [t.spellId, t.domainId] })],
+    (t) => [primaryKey({columns: [t.spellId, t.domainId]})],
 );
 
 // Spell ↔ Subdomain (with spell level)
@@ -201,7 +193,7 @@ export const subdomainSpells = pgTable(
             .references(() => subdomains.id),
         level: smallint("level").notNull(),
     },
-    (t) => [primaryKey({ columns: [t.spellId, t.subdomainId] })],
+    (t) => [primaryKey({columns: [t.spellId, t.subdomainId]})],
 );
 
 // Spell ↔ Bloodline (with class level)
@@ -216,7 +208,7 @@ export const bloodlineSpells = pgTable(
             .references(() => bloodlines.id),
         classLevel: smallint("class_level").notNull(),
     },
-    (t) => [primaryKey({ columns: [t.spellId, t.bloodlineId] })],
+    (t) => [primaryKey({columns: [t.spellId, t.bloodlineId]})],
 );
 
 // Spell ↔ Patron (with class level)
@@ -231,7 +223,7 @@ export const patronSpells = pgTable(
             .references(() => patrons.id),
         classLevel: smallint("class_level").notNull(),
     },
-    (t) => [primaryKey({ columns: [t.spellId, t.patronId] })],
+    (t) => [primaryKey({columns: [t.spellId, t.patronId]})],
 );
 
 // Spell ↔ Mystery (with class level and optional note)
@@ -247,7 +239,7 @@ export const mysterySpells = pgTable(
         classLevel: smallint("class_level").notNull(),
         note: text("note"),
     },
-    (t) => [primaryKey({ columns: [t.mysteryId, t.spellId, t.classLevel] })],
+    (t) => [primaryKey({columns: [t.mysteryId, t.spellId, t.classLevel]})],
 );
 
 // ─── Feats ────────────────────────────────────────────────────────────────────
@@ -274,10 +266,10 @@ export const feats = pgTable("feats", {
 
 // ─── Relations ────────────────────────────────────────────────────────────────
 
-export const spellsRelations = relations(spells, ({ one, many }) => ({
-    school: one(schools, { fields: [spells.schoolId], references: [schools.id] }),
-    subschool: one(subschools, { fields: [spells.subschoolId], references: [subschools.id] }),
-    deity: one(deities, { fields: [spells.deityId], references: [deities.id] }),
+export const spellsRelations = relations(spells, ({one, many}) => ({
+    school: one(schools, {fields: [spells.schoolId], references: [schools.id]}),
+    subschool: one(subschools, {fields: [spells.subschoolId], references: [subschools.id]}),
+    deity: one(deities, {fields: [spells.deityId], references: [deities.id]}),
     spellClasses: many(spellClasses),
     domainSpells: many(domainSpells),
     subdomainSpells: many(subdomainSpells),
@@ -286,98 +278,98 @@ export const spellsRelations = relations(spells, ({ one, many }) => ({
     mysterySpells: many(mysterySpells),
 }));
 
-export const spellClassesRelations = relations(spellClasses, ({ one }) => ({
-    spell: one(spells, { fields: [spellClasses.spellId], references: [spells.id] }),
-    class: one(classes, { fields: [spellClasses.classId], references: [classes.id] }),
+export const spellClassesRelations = relations(spellClasses, ({one}) => ({
+    spell: one(spells, {fields: [spellClasses.spellId], references: [spells.id]}),
+    class: one(classes, {fields: [spellClasses.classId], references: [classes.id]}),
 }));
 
-export const classesRelations = relations(classes, ({ many }) => ({
+export const classesRelations = relations(classes, ({many}) => ({
     spellClasses: many(spellClasses),
 }));
 
-export const schoolsRelations = relations(schools, ({ many }) => ({
+export const schoolsRelations = relations(schools, ({many}) => ({
     spells: many(spells),
 }));
 
-export const subschoolsRelations = relations(subschools, ({ many }) => ({
+export const subschoolsRelations = relations(subschools, ({many}) => ({
     spells: many(spells),
 }));
 
-export const deitiesRelations = relations(deities, ({ many }) => ({
+export const deitiesRelations = relations(deities, ({many}) => ({
     spells: many(spells),
     domainDeities: many(domainDeities),
     subdomainDeities: many(subdomainDeities),
     mysteryDeities: many(mysteryDeities),
 }));
 
-export const domainsRelations = relations(domains, ({ many }) => ({
+export const domainsRelations = relations(domains, ({many}) => ({
     domainSubdomains: many(domainSubdomains),
     domainDeities: many(domainDeities),
     domainSpells: many(domainSpells),
 }));
 
-export const subdomainsRelations = relations(subdomains, ({ many }) => ({
+export const subdomainsRelations = relations(subdomains, ({many}) => ({
     domainSubdomains: many(domainSubdomains),
     subdomainDeities: many(subdomainDeities),
     subdomainSpells: many(subdomainSpells),
 }));
 
-export const domainSubdomainsRelations = relations(domainSubdomains, ({ one }) => ({
-    domain: one(domains, { fields: [domainSubdomains.domainId], references: [domains.id] }),
-    subdomain: one(subdomains, { fields: [domainSubdomains.subdomainId], references: [subdomains.id] }),
+export const domainSubdomainsRelations = relations(domainSubdomains, ({one}) => ({
+    domain: one(domains, {fields: [domainSubdomains.domainId], references: [domains.id]}),
+    subdomain: one(subdomains, {fields: [domainSubdomains.subdomainId], references: [subdomains.id]}),
 }));
 
-export const domainDeitiesRelations = relations(domainDeities, ({ one }) => ({
-    domain: one(domains, { fields: [domainDeities.domainId], references: [domains.id] }),
-    deity: one(deities, { fields: [domainDeities.deityId], references: [deities.id] }),
+export const domainDeitiesRelations = relations(domainDeities, ({one}) => ({
+    domain: one(domains, {fields: [domainDeities.domainId], references: [domains.id]}),
+    deity: one(deities, {fields: [domainDeities.deityId], references: [deities.id]}),
 }));
 
-export const subdomainDeitiesRelations = relations(subdomainDeities, ({ one }) => ({
-    subdomain: one(subdomains, { fields: [subdomainDeities.subdomainId], references: [subdomains.id] }),
-    deity: one(deities, { fields: [subdomainDeities.deityId], references: [deities.id] }),
+export const subdomainDeitiesRelations = relations(subdomainDeities, ({one}) => ({
+    subdomain: one(subdomains, {fields: [subdomainDeities.subdomainId], references: [subdomains.id]}),
+    deity: one(deities, {fields: [subdomainDeities.deityId], references: [deities.id]}),
 }));
 
-export const bloodlinesRelations = relations(bloodlines, ({ many }) => ({
+export const bloodlinesRelations = relations(bloodlines, ({many}) => ({
     bloodlineSpells: many(bloodlineSpells),
 }));
 
-export const bloodlineSpellsRelations = relations(bloodlineSpells, ({ one }) => ({
-    spell: one(spells, { fields: [bloodlineSpells.spellId], references: [spells.id] }),
-    bloodline: one(bloodlines, { fields: [bloodlineSpells.bloodlineId], references: [bloodlines.id] }),
+export const bloodlineSpellsRelations = relations(bloodlineSpells, ({one}) => ({
+    spell: one(spells, {fields: [bloodlineSpells.spellId], references: [spells.id]}),
+    bloodline: one(bloodlines, {fields: [bloodlineSpells.bloodlineId], references: [bloodlines.id]}),
 }));
 
-export const patronsRelations = relations(patrons, ({ many }) => ({
+export const patronsRelations = relations(patrons, ({many}) => ({
     patronSpells: many(patronSpells),
 }));
 
-export const patronSpellsRelations = relations(patronSpells, ({ one }) => ({
-    spell: one(spells, { fields: [patronSpells.spellId], references: [spells.id] }),
-    patron: one(patrons, { fields: [patronSpells.patronId], references: [patrons.id] }),
+export const patronSpellsRelations = relations(patronSpells, ({one}) => ({
+    spell: one(spells, {fields: [patronSpells.spellId], references: [spells.id]}),
+    patron: one(patrons, {fields: [patronSpells.patronId], references: [patrons.id]}),
 }));
 
-export const mysteriesRelations = relations(mysteries, ({ many }) => ({
+export const mysteriesRelations = relations(mysteries, ({many}) => ({
     mysteryDeities: many(mysteryDeities),
     mysterySpells: many(mysterySpells),
 }));
 
-export const mysteryDeitiesRelations = relations(mysteryDeities, ({ one }) => ({
-    mystery: one(mysteries, { fields: [mysteryDeities.mysteryId], references: [mysteries.id] }),
-    deity: one(deities, { fields: [mysteryDeities.deityId], references: [deities.id] }),
+export const mysteryDeitiesRelations = relations(mysteryDeities, ({one}) => ({
+    mystery: one(mysteries, {fields: [mysteryDeities.mysteryId], references: [mysteries.id]}),
+    deity: one(deities, {fields: [mysteryDeities.deityId], references: [deities.id]}),
 }));
 
-export const mysterySpellsRelations = relations(mysterySpells, ({ one }) => ({
-    mystery: one(mysteries, { fields: [mysterySpells.mysteryId], references: [mysteries.id] }),
-    spell: one(spells, { fields: [mysterySpells.spellId], references: [spells.id] }),
+export const mysterySpellsRelations = relations(mysterySpells, ({one}) => ({
+    mystery: one(mysteries, {fields: [mysterySpells.mysteryId], references: [mysteries.id]}),
+    spell: one(spells, {fields: [mysterySpells.spellId], references: [spells.id]}),
 }));
 
-export const domainSpellsRelations = relations(domainSpells, ({ one }) => ({
-    domain: one(domains, { fields: [domainSpells.domainId], references: [domains.id] }),
-    spell: one(spells, { fields: [domainSpells.spellId], references: [spells.id] }),
+export const domainSpellsRelations = relations(domainSpells, ({one}) => ({
+    domain: one(domains, {fields: [domainSpells.domainId], references: [domains.id]}),
+    spell: one(spells, {fields: [domainSpells.spellId], references: [spells.id]}),
 }));
 
-export const subdomainSpellsRelations = relations(subdomainSpells, ({ one }) => ({
-    subdomain: one(subdomains, { fields: [subdomainSpells.subdomainId], references: [subdomains.id] }),
-    spell: one(spells, { fields: [subdomainSpells.spellId], references: [spells.id] }),
+export const subdomainSpellsRelations = relations(subdomainSpells, ({one}) => ({
+    subdomain: one(subdomains, {fields: [subdomainSpells.subdomainId], references: [subdomains.id]}),
+    spell: one(spells, {fields: [subdomainSpells.spellId], references: [spells.id]}),
 }));
 
 // ─── Inferred types ──────────────────────────────────────────────────────────

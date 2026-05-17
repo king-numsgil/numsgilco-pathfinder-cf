@@ -1,16 +1,5 @@
+import { and, asc, count, eq, exists, ilike, inArray, or, sql, type SQL } from "drizzle-orm";
 import { Hono } from "hono";
-import {
-    and,
-    asc,
-    count,
-    eq,
-    exists,
-    ilike,
-    inArray,
-    or,
-    sql,
-    type SQL,
-} from "drizzle-orm";
 import { createDb } from "../db";
 import * as s from "../db/schema";
 
@@ -45,14 +34,22 @@ function buildWhere(
         mysteryIds: string[];
     },
 ): SQL | undefined {
-    const { q, levels, classIds, domainIds, subdomainIds, schoolIds, subschoolIds,
-        bloodlineIds, patronIds, mysteryIds } = params;
+    const {
+        q, levels, classIds, domainIds, subdomainIds, schoolIds, subschoolIds,
+        bloodlineIds, patronIds, mysteryIds,
+    } = params;
 
     const filters: SQL[] = [];
 
-    if (q) filters.push(ilike(s.spells.name, `%${q}%`));
-    if (schoolIds.length) filters.push(inArray(s.spells.schoolId, schoolIds));
-    if (subschoolIds.length) filters.push(inArray(s.spells.subschoolId, subschoolIds));
+    if (q) {
+        filters.push(ilike(s.spells.name, `%${q}%`));
+    }
+    if (schoolIds.length) {
+        filters.push(inArray(s.spells.schoolId, schoolIds));
+    }
+    if (subschoolIds.length) {
+        filters.push(inArray(s.spells.subschoolId, subschoolIds));
+    }
 
     // Each source type produces an EXISTS correlated subquery.
     // Level constraint is baked into each source it applies to.
@@ -61,54 +58,69 @@ function buildWhere(
 
     if (classIds.length) {
         const conds: SQL[] = [eq(s.spellClasses.spellId, s.spells.id), inArray(s.spellClasses.classId, classIds)];
-        if (levels.length) conds.push(inArray(s.spellClasses.level, levels));
-        sourceExists.push(exists(db.select({ _: sql`1` }).from(s.spellClasses).where(and(...conds))));
+        if (levels.length) {
+            conds.push(inArray(s.spellClasses.level, levels));
+        }
+        sourceExists.push(exists(db.select({_: sql`1`}).from(s.spellClasses).where(and(...conds))));
     }
 
     if (domainIds.length) {
         const conds: SQL[] = [eq(s.domainSpells.spellId, s.spells.id), inArray(s.domainSpells.domainId, domainIds)];
-        if (levels.length) conds.push(inArray(s.domainSpells.level, levels));
-        sourceExists.push(exists(db.select({ _: sql`1` }).from(s.domainSpells).where(and(...conds))));
+        if (levels.length) {
+            conds.push(inArray(s.domainSpells.level, levels));
+        }
+        sourceExists.push(exists(db.select({_: sql`1`}).from(s.domainSpells).where(and(...conds))));
     }
 
     if (subdomainIds.length) {
         const conds: SQL[] = [eq(s.subdomainSpells.spellId, s.spells.id), inArray(s.subdomainSpells.subdomainId, subdomainIds)];
-        if (levels.length) conds.push(inArray(s.subdomainSpells.level, levels));
-        sourceExists.push(exists(db.select({ _: sql`1` }).from(s.subdomainSpells).where(and(...conds))));
+        if (levels.length) {
+            conds.push(inArray(s.subdomainSpells.level, levels));
+        }
+        sourceExists.push(exists(db.select({_: sql`1`}).from(s.subdomainSpells).where(and(...conds))));
     }
 
     if (bloodlineIds.length) {
         const conds: SQL[] = [eq(s.bloodlineSpells.spellId, s.spells.id), inArray(s.bloodlineSpells.bloodlineId, bloodlineIds)];
-        if (levels.length) conds.push(inArray(s.bloodlineSpells.classLevel, levels));
-        sourceExists.push(exists(db.select({ _: sql`1` }).from(s.bloodlineSpells).where(and(...conds))));
+        if (levels.length) {
+            conds.push(inArray(s.bloodlineSpells.classLevel, levels));
+        }
+        sourceExists.push(exists(db.select({_: sql`1`}).from(s.bloodlineSpells).where(and(...conds))));
     }
 
     if (patronIds.length) {
         const conds: SQL[] = [eq(s.patronSpells.spellId, s.spells.id), inArray(s.patronSpells.patronId, patronIds)];
-        if (levels.length) conds.push(inArray(s.patronSpells.classLevel, levels));
-        sourceExists.push(exists(db.select({ _: sql`1` }).from(s.patronSpells).where(and(...conds))));
+        if (levels.length) {
+            conds.push(inArray(s.patronSpells.classLevel, levels));
+        }
+        sourceExists.push(exists(db.select({_: sql`1`}).from(s.patronSpells).where(and(...conds))));
     }
 
     if (mysteryIds.length) {
         const conds: SQL[] = [eq(s.mysterySpells.spellId, s.spells.id), inArray(s.mysterySpells.mysteryId, mysteryIds)];
-        if (levels.length) conds.push(inArray(s.mysterySpells.classLevel, levels));
-        sourceExists.push(exists(db.select({ _: sql`1` }).from(s.mysterySpells).where(and(...conds))));
+        if (levels.length) {
+            conds.push(inArray(s.mysterySpells.classLevel, levels));
+        }
+        sourceExists.push(exists(db.select({_: sql`1`}).from(s.mysterySpells).where(and(...conds))));
     }
 
     // Level-only (no source filter): spell must appear at that level in any source
     if (sourceExists.length === 0 && levels.length) {
         sourceExists.push(
-            exists(db.select({ _: sql`1` }).from(s.spellClasses).where(and(eq(s.spellClasses.spellId, s.spells.id), inArray(s.spellClasses.level, levels)))),
-            exists(db.select({ _: sql`1` }).from(s.domainSpells).where(and(eq(s.domainSpells.spellId, s.spells.id), inArray(s.domainSpells.level, levels)))),
-            exists(db.select({ _: sql`1` }).from(s.subdomainSpells).where(and(eq(s.subdomainSpells.spellId, s.spells.id), inArray(s.subdomainSpells.level, levels)))),
-            exists(db.select({ _: sql`1` }).from(s.bloodlineSpells).where(and(eq(s.bloodlineSpells.spellId, s.spells.id), inArray(s.bloodlineSpells.classLevel, levels)))),
-            exists(db.select({ _: sql`1` }).from(s.patronSpells).where(and(eq(s.patronSpells.spellId, s.spells.id), inArray(s.patronSpells.classLevel, levels)))),
-            exists(db.select({ _: sql`1` }).from(s.mysterySpells).where(and(eq(s.mysterySpells.spellId, s.spells.id), inArray(s.mysterySpells.classLevel, levels)))),
+            exists(db.select({_: sql`1`}).from(s.spellClasses).where(and(eq(s.spellClasses.spellId, s.spells.id), inArray(s.spellClasses.level, levels)))),
+            exists(db.select({_: sql`1`}).from(s.domainSpells).where(and(eq(s.domainSpells.spellId, s.spells.id), inArray(s.domainSpells.level, levels)))),
+            exists(db.select({_: sql`1`}).from(s.subdomainSpells).where(and(eq(s.subdomainSpells.spellId, s.spells.id), inArray(s.subdomainSpells.level, levels)))),
+            exists(db.select({_: sql`1`}).from(s.bloodlineSpells).where(and(eq(s.bloodlineSpells.spellId, s.spells.id), inArray(s.bloodlineSpells.classLevel, levels)))),
+            exists(db.select({_: sql`1`}).from(s.patronSpells).where(and(eq(s.patronSpells.spellId, s.spells.id), inArray(s.patronSpells.classLevel, levels)))),
+            exists(db.select({_: sql`1`}).from(s.mysterySpells).where(and(eq(s.mysterySpells.spellId, s.spells.id), inArray(s.mysterySpells.classLevel, levels)))),
         );
     }
 
-    if (sourceExists.length === 1) filters.push(sourceExists[0]);
-    else if (sourceExists.length > 1) filters.push(or(...sourceExists)!);
+    if (sourceExists.length === 1) {
+        filters.push(sourceExists[0]);
+    } else if (sourceExists.length > 1) {
+        filters.push(or(...sourceExists)!);
+    }
 
     return filters.length > 0 ? and(...filters) : undefined;
 }
@@ -138,8 +150,8 @@ app.get("/", async (c) => {
 
     const where = buildWhere(db, searchParams);
 
-    const [{ total }, data] = await Promise.all([
-        db.select({ total: count() }).from(s.spells).where(where).then((r) => r[0]),
+    const [{total}, data] = await Promise.all([
+        db.select({total: count()}).from(s.spells).where(where).then((r) => r[0]),
         db
             .select({
                 id: s.spells.id,
@@ -159,7 +171,7 @@ app.get("/", async (c) => {
             .offset(offset),
     ]);
 
-    return c.json({ data, total, limit, offset });
+    return c.json({data, total, limit, offset});
 });
 
 // ─── GET /spells/:id ──────────────────────────────────────────────────────────
@@ -175,33 +187,35 @@ app.get("/:id", async (c) => {
             subschool: true,
             deity: true,
             spellClasses: {
-                with: { class: true },
-                orderBy: (sc, { asc: a }) => [a(sc.level)],
+                with: {class: true},
+                orderBy: (sc, {asc: a}) => [a(sc.level)],
             },
             domainSpells: {
-                with: { domain: true },
-                orderBy: (ds, { asc: a }) => [a(ds.level)],
+                with: {domain: true},
+                orderBy: (ds, {asc: a}) => [a(ds.level)],
             },
             subdomainSpells: {
-                with: { subdomain: true },
-                orderBy: (ss, { asc: a }) => [a(ss.level)],
+                with: {subdomain: true},
+                orderBy: (ss, {asc: a}) => [a(ss.level)],
             },
             bloodlineSpells: {
-                with: { bloodline: true },
-                orderBy: (bs, { asc: a }) => [a(bs.classLevel)],
+                with: {bloodline: true},
+                orderBy: (bs, {asc: a}) => [a(bs.classLevel)],
             },
             patronSpells: {
-                with: { patron: true },
-                orderBy: (ps, { asc: a }) => [a(ps.classLevel)],
+                with: {patron: true},
+                orderBy: (ps, {asc: a}) => [a(ps.classLevel)],
             },
             mysterySpells: {
-                with: { mystery: true },
-                orderBy: (ms, { asc: a }) => [a(ms.classLevel)],
+                with: {mystery: true},
+                orderBy: (ms, {asc: a}) => [a(ms.classLevel)],
             },
         },
     });
 
-    if (!spell) return c.json({ error: "Not found" }, 404);
+    if (!spell) {
+        return c.json({error: "Not found"}, 404);
+    }
 
     // Reshape into a clean response
     return c.json({
@@ -240,16 +254,16 @@ app.get("/:id", async (c) => {
         shapeable: spell.shapeable,
 
         permanency: spell.permanency
-            ? { cl: spell.permanencyCl, cost: spell.permanencyCost }
+            ? {cl: spell.permanencyCl, cost: spell.permanencyCost}
             : null,
         slaLevel: spell.slaLevel,
         race: spell.race,
 
-        classes: spell.spellClasses.map((sc) => ({ ...sc.class, level: sc.level })),
-        domains: spell.domainSpells.map((ds) => ({ ...ds.domain, level: ds.level })),
-        subdomains: spell.subdomainSpells.map((ss) => ({ ...ss.subdomain, level: ss.level })),
-        bloodlines: spell.bloodlineSpells.map((bs) => ({ ...bs.bloodline, classLevel: bs.classLevel })),
-        patrons: spell.patronSpells.map((ps) => ({ ...ps.patron, classLevel: ps.classLevel })),
+        classes: spell.spellClasses.map((sc) => ({...sc.class, level: sc.level})),
+        domains: spell.domainSpells.map((ds) => ({...ds.domain, level: ds.level})),
+        subdomains: spell.subdomainSpells.map((ss) => ({...ss.subdomain, level: ss.level})),
+        bloodlines: spell.bloodlineSpells.map((bs) => ({...bs.bloodline, classLevel: bs.classLevel})),
+        patrons: spell.patronSpells.map((ps) => ({...ps.patron, classLevel: ps.classLevel})),
         mysteries: spell.mysterySpells.map((ms) => ({
             ...ms.mystery,
             classLevel: ms.classLevel,

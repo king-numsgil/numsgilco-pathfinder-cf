@@ -11,8 +11,8 @@ import * as schema from "./schema";
  * connection pool and doesn't support prepared statements across requests.
  */
 export function createDb(connectionString: string) {
-    const client = postgres(connectionString, { prepare: false });
-    return drizzle(client, { schema });
+    const client = postgres(connectionString, {prepare: false});
+    return drizzle(client, {schema});
 }
 
 export type AppDb = ReturnType<typeof createDb>;

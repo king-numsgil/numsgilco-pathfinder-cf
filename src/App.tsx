@@ -1,3 +1,4 @@
+import type { FC } from "react";
 import { createHashRouter, RouterProvider } from "react-router-dom";
 import { FeatModal } from "./pages/FeatModal";
 import { Feats } from "./pages/Feats";
@@ -8,25 +9,25 @@ import { Shell } from "./Shell";
 
 const router = createHashRouter([
     {
-        element: <Shell />,
+        element: <Shell/>,
         children: [
-            { path: "/", element: <Home /> },
+            {path: "/", element: <Home/>},
             {
                 path: "/spells",
-                element: <Spells />,
-                children: [{ path: ":id", element: <SpellModal /> }],
+                element: <Spells/>,
+                children: [{path: ":id", element: <SpellModal/>}],
             },
             {
                 path: "/feats",
-                element: <Feats />,
-                children: [{ path: ":id", element: <FeatModal /> }],
+                element: <Feats/>,
+                children: [{path: ":id", element: <FeatModal/>}],
             },
         ],
     },
 ]);
 
-function App() {
-    return <RouterProvider router={router} />;
-}
+const App: FC = () => {
+    return <RouterProvider router={router}/>;
+};
 
 export default App;

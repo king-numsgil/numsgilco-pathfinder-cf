@@ -83,26 +83,32 @@ export type DomainWithSubdomains = LookupItem & { subdomains: LookupItem[] };
 function buildUrl(path: string, params: Record<string, string | number | undefined>): string {
     const url = new URL(path, window.location.origin);
     for (const [k, v] of Object.entries(params)) {
-        if (v !== undefined && v !== "") url.searchParams.set(k, String(v));
+        if (v !== undefined && v !== "") {
+            url.searchParams.set(k, String(v));
+        }
     }
     return url.toString();
 }
 
 async function fetchLookup(path: string): Promise<LookupItem[]> {
     const res = await fetch(path);
-    if (!res.ok) throw new Error(`Failed to fetch ${path}`);
+    if (!res.ok) {
+        throw new Error(`Failed to fetch ${path}`);
+    }
     return res.json() as Promise<LookupItem[]>;
 }
 
-export const fetchSchools    = () => fetchLookup("/api/schools");
-export const fetchClasses    = () => fetchLookup("/api/classes");
+export const fetchSchools = () => fetchLookup("/api/schools");
+export const fetchClasses = () => fetchLookup("/api/classes");
 export const fetchBloodlines = () => fetchLookup("/api/bloodlines");
-export const fetchPatrons    = () => fetchLookup("/api/patrons");
-export const fetchMysteries  = () => fetchLookup("/api/mysteries");
+export const fetchPatrons = () => fetchLookup("/api/patrons");
+export const fetchMysteries = () => fetchLookup("/api/mysteries");
 
 export async function fetchDomains(): Promise<DomainWithSubdomains[]> {
     const res = await fetch("/api/domains");
-    if (!res.ok) throw new Error("Failed to fetch domains");
+    if (!res.ok) {
+        throw new Error("Failed to fetch domains");
+    }
     return res.json() as Promise<DomainWithSubdomains[]>;
 }
 
@@ -114,13 +120,19 @@ export async function fetchSpells(params: SpellSearchParams): Promise<SpellListR
             offset: params.offset ?? 0,
         }),
     );
-    if (!res.ok) throw new Error("Failed to fetch spells");
+    if (!res.ok) {
+        throw new Error("Failed to fetch spells");
+    }
     return res.json() as Promise<SpellListResponse>;
 }
 
 export async function fetchSpell(id: string): Promise<SpellDetail> {
     const res = await fetch(`/api/spells/${encodeURIComponent(id)}`);
-    if (res.status === 404) throw new Error("Spell not found");
-    if (!res.ok) throw new Error("Failed to fetch spell");
+    if (res.status === 404) {
+        throw new Error("Spell not found");
+    }
+    if (!res.ok) {
+        throw new Error("Failed to fetch spell");
+    }
     return res.json() as Promise<SpellDetail>;
 }

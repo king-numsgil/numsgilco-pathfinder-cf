@@ -1,15 +1,5 @@
-import {
-    ActionIcon,
-    Chip,
-    Divider,
-    Drawer,
-    Group,
-    MultiSelect,
-    ScrollArea,
-    Stack,
-    Text,
-} from "@mantine/core";
-import { useMemo } from "react";
+import { ActionIcon, Chip, Divider, Drawer, Group, MultiSelect, ScrollArea, Stack, Text } from "@mantine/core";
+import { type FC, useMemo } from "react";
 import { FiX } from "react-icons/fi";
 import { type DomainWithSubdomains, type LookupItem } from "../api";
 import { type FilterState } from "./spellFilterState";
@@ -27,13 +17,13 @@ const SCHOOL_COLORS: Record<string, string> = {
 };
 
 function toOptions(items: LookupItem[]) {
-    return items.map((i) => ({ value: i.id, label: i.name }));
+    return items.map((i) => ({value: i.id, label: i.name}));
 }
 
-function FilterSection({ label, children }: { label: string; children: React.ReactNode }) {
+function FilterSection({label, children}: { label: string; children: React.ReactNode }) {
     return (
         <Stack gap={6}>
-            <Text size="xs" tt="uppercase" fw={700} c="dimmed" style={{ letterSpacing: "0.06em" }}>
+            <Text size="xs" tt="uppercase" fw={700} c="dimmed" style={{letterSpacing: "0.06em"}}>
                 {label}
             </Text>
             {children}
@@ -55,32 +45,42 @@ interface Props {
     mysteries: LookupItem[];
 }
 
-export function SpellFilters({
-    opened, onClose, filters, onChange, onClear,
-    schools, classes, domains, bloodlines, patrons, mysteries,
-}: Props) {
-    // When domains are selected, show only their subdomains; otherwise show all
-    const availableSubdomains = useMemo(() => {
-        const source = filters.domainIds.length
-            ? domains.filter((d) => filters.domainIds.includes(d.id))
-            : domains;
-        const seen = new Set<string>();
-        return source.flatMap((d) => d.subdomains).filter((s) => {
-            if (seen.has(s.id)) return false;
-            seen.add(s.id);
-            return true;
-        });
-    }, [domains, filters.domainIds]);
+export const SpellFilters: FC<Props> =
+    ({
+         opened,
+         onClose,
+         filters,
+         onChange,
+         onClear,
+         schools,
+         classes,
+         domains,
+         bloodlines,
+         patrons,
+         mysteries,
+     }) => {
+        const availableSubdomains = useMemo(() => {
+            const source = filters.domainIds.length
+                ? domains.filter((d) => filters.domainIds.includes(d.id))
+                : domains;
+            const seen = new Set<string>();
+            return source.flatMap((d) => d.subdomains).filter((s) => {
+                if (seen.has(s.id)) {
+                    return false;
+                }
+                seen.add(s.id);
+                return true;
+            });
+        }, [domains, filters.domainIds]);
 
-    return (
-        <Drawer
+        return <Drawer
             opened={opened}
             onClose={onClose}
             title={
                 <Group justify="space-between" w="100%">
                     <Text fw={600}>Filters</Text>
                     <ActionIcon variant="subtle" color="gray" onClick={onClear} title="Clear all filters">
-                        <FiX size={16} />
+                        <FiX size={16}/>
                     </ActionIcon>
                 </Group>
             }
@@ -101,7 +101,7 @@ export function SpellFilters({
                     </Chip.Group>
                 </FilterSection>
 
-                <Divider />
+                <Divider/>
 
                 <FilterSection label="School">
                     <Chip.Group multiple value={filters.schoolIds} onChange={(v) => onChange("schoolIds", v)}>
@@ -121,7 +121,7 @@ export function SpellFilters({
                     </Chip.Group>
                 </FilterSection>
 
-                <Divider />
+                <Divider/>
 
                 <FilterSection label="Class">
                     <MultiSelect
@@ -135,7 +135,7 @@ export function SpellFilters({
                     />
                 </FilterSection>
 
-                <Divider />
+                <Divider/>
 
                 <FilterSection label="Domain">
                     <MultiSelect
@@ -161,7 +161,7 @@ export function SpellFilters({
                     />
                 </FilterSection>
 
-                <Divider />
+                <Divider/>
 
                 <FilterSection label="Bloodline">
                     <MultiSelect
@@ -199,6 +199,5 @@ export function SpellFilters({
                     />
                 </FilterSection>
             </Stack>
-        </Drawer>
-    );
-}
+        </Drawer>;
+    };
