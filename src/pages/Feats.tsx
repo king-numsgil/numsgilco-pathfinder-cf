@@ -3,7 +3,7 @@ import { useDebouncedValue } from "@mantine/hooks";
 import { type FC, useEffect, useRef, useState, useTransition } from "react";
 import { FiFilter, FiSearch } from "react-icons/fi";
 import { Outlet, useNavigate } from "react-router-dom";
-import { fetchFeatTypes, fetchFeats, type FeatListItem } from "../api";
+import { type FeatListItem, fetchFeats, fetchFeatTypes } from "../api";
 import { FeatFilters } from "./FeatFilters";
 import { activeFeatFilterCount, EMPTY_FEAT_FILTERS, FEAT_TYPE_COLORS, type FeatFilterState } from "./featFilterState";
 
@@ -35,7 +35,8 @@ export const Feats: FC = () => {
 
     // Load feat types on mount
     useEffect(() => {
-        fetchFeatTypes().then(setFeatTypes).catch(() => {/* non-fatal */});
+        fetchFeatTypes().then(setFeatTypes).catch(() => {/* non-fatal */
+        });
     }, []);
 
     // Stable string keys for array / derived filter values
@@ -57,15 +58,21 @@ export const Feats: FC = () => {
                     limit: String(PAGE_SIZE),
                     offset: "0",
                 });
-                if (seq !== fetchSeq.current) return;
+                if (seq !== fetchSeq.current) {
+                    return;
+                }
                 setResults(data.data);
                 setTotal(data.total);
                 setError(null);
             } catch {
-                if (seq !== fetchSeq.current) return;
+                if (seq !== fetchSeq.current) {
+                    return;
+                }
                 setError("Failed to load feats.");
             } finally {
-                if (seq === fetchSeq.current) setHasLoaded(true);
+                if (seq === fetchSeq.current) {
+                    setHasLoaded(true);
+                }
             }
         });
     }, [debouncedSearch, typeKey, filters.maxBab, filters.maxCl]);
@@ -73,15 +80,23 @@ export const Feats: FC = () => {
     // Infinite scroll — no dep array so closure always sees current values
     useEffect(() => {
         const sentinel = sentinelRef.current;
-        if (!sentinel || !hasLoaded || isPending || results.length >= total) return;
+        if (!sentinel || !hasLoaded || isPending || results.length >= total) {
+            return;
+        }
 
         const myLmSeq = loadMoreSeq.current;
 
         const observer = new IntersectionObserver(
             (entries) => {
-                if (!entries[0].isIntersecting) return;
-                if (isLoadingMoreRef.current) return;
-                if (loadMoreSeq.current !== myLmSeq) return;
+                if (!entries[0].isIntersecting) {
+                    return;
+                }
+                if (isLoadingMoreRef.current) {
+                    return;
+                }
+                if (loadMoreSeq.current !== myLmSeq) {
+                    return;
+                }
 
                 isLoadingMoreRef.current = true;
                 setLoadingMore(true);
@@ -93,7 +108,9 @@ export const Feats: FC = () => {
                     limit: String(PAGE_SIZE),
                     offset: String(results.length),
                 }).then((data) => {
-                    if (loadMoreSeq.current !== myLmSeq) return;
+                    if (loadMoreSeq.current !== myLmSeq) {
+                        return;
+                    }
                     setResults((prev) => [...prev, ...data.data]);
                     setTotal(data.total);
                 }).catch(() => {

@@ -1,5 +1,5 @@
-import { hc } from "hono/client";
 import type { InferRequestType, InferResponseType } from "hono/client";
+import { hc } from "hono/client";
 import type { AppType } from "../../worker";
 
 const client = hc<AppType>(window.location.origin);
@@ -25,80 +25,110 @@ export type FeatSearchParams = InferRequestType<typeof client.api.feats.$get>["q
 
 export const fetchSchools = async (): Promise<LookupItem[]> => {
     const res = await client.api.schools.$get();
-    if (!res.ok) throw new Error("Failed to fetch schools");
+    if (!res.ok) {
+        throw new Error("Failed to fetch schools");
+    }
     return res.json();
 };
 
 export const fetchSubschools = async (): Promise<LookupItem[]> => {
     const res = await client.api.subschools.$get();
-    if (!res.ok) throw new Error("Failed to fetch subschools");
+    if (!res.ok) {
+        throw new Error("Failed to fetch subschools");
+    }
     return res.json();
 };
 
 export const fetchClasses = async (): Promise<LookupItem[]> => {
     const res = await client.api.classes.$get();
-    if (!res.ok) throw new Error("Failed to fetch classes");
+    if (!res.ok) {
+        throw new Error("Failed to fetch classes");
+    }
     return res.json();
 };
 
 export const fetchBloodlines = async (): Promise<LookupItem[]> => {
     const res = await client.api.bloodlines.$get();
-    if (!res.ok) throw new Error("Failed to fetch bloodlines");
+    if (!res.ok) {
+        throw new Error("Failed to fetch bloodlines");
+    }
     return res.json();
 };
 
 export const fetchPatrons = async (): Promise<LookupItem[]> => {
     const res = await client.api.patrons.$get();
-    if (!res.ok) throw new Error("Failed to fetch patrons");
+    if (!res.ok) {
+        throw new Error("Failed to fetch patrons");
+    }
     return res.json();
 };
 
 export const fetchMysteries = async (): Promise<LookupItem[]> => {
     const res = await client.api.mysteries.$get();
-    if (!res.ok) throw new Error("Failed to fetch mysteries");
+    if (!res.ok) {
+        throw new Error("Failed to fetch mysteries");
+    }
     return res.json();
 };
 
 export async function fetchDomains(): Promise<DomainWithSubdomains[]> {
     const res = await client.api.domains.$get();
-    if (!res.ok) throw new Error("Failed to fetch domains");
+    if (!res.ok) {
+        throw new Error("Failed to fetch domains");
+    }
     return res.json();
 }
 
 export async function fetchDescriptors(): Promise<string[]> {
     const res = await client.api.descriptors.$get();
-    if (!res.ok) throw new Error("Failed to fetch descriptors");
+    if (!res.ok) {
+        throw new Error("Failed to fetch descriptors");
+    }
     return res.json();
 }
 
 export async function fetchSpells(params: SpellSearchParams): Promise<SpellListResponse> {
     const res = await client.api.spells.$get({query: params});
-    if (!res.ok) throw new Error("Failed to fetch spells");
+    if (!res.ok) {
+        throw new Error("Failed to fetch spells");
+    }
     return res.json();
 }
 
 export async function fetchSpell(id: string): Promise<SpellDetail> {
     const res = await client.api.spells[":id"].$get({param: {id}});
-    if (res.status === 404) throw new Error("Spell not found");
-    if (!res.ok) throw new Error("Failed to fetch spell");
+    if (res.status === 404) {
+        throw new Error("Spell not found");
+    }
+    if (!res.ok) {
+        throw new Error("Failed to fetch spell");
+    }
     return res.json();
 }
 
 export async function fetchFeatTypes(): Promise<string[]> {
     const res = await client.api["feat-types"].$get();
-    if (!res.ok) throw new Error("Failed to fetch feat types");
+    if (!res.ok) {
+        throw new Error("Failed to fetch feat types");
+    }
     return res.json();
 }
 
 export async function fetchFeats(params: FeatSearchParams): Promise<FeatListResponse> {
     const res = await client.api.feats.$get({query: params});
-    if (!res.ok) throw new Error("Failed to fetch feats");
+    if (!res.ok) {
+        throw new Error("Failed to fetch feats");
+    }
     return res.json();
 }
 
 export async function fetchFeat(id: string): Promise<FeatDetail> {
     const res = await client.api.feats[":id"].$get({param: {id}});
-    if (res.status === 404) throw new Error("Feat not found");
-    if (!res.ok) throw new Error("Failed to fetch feat");
+    if (res.status === 404) {
+        throw new Error("Feat not found");
+    }
+    if (!res.ok) {
+        throw new Error("Failed to fetch feat");
+    }
     return res.json();
 }

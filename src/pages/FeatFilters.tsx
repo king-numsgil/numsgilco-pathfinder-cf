@@ -3,7 +3,7 @@ import { type FC } from "react";
 import { FiX } from "react-icons/fi";
 import { activeFeatFilterCount, FEAT_TYPE_COLORS, type FeatFilterState } from "./featFilterState";
 
-function FilterSection({label, children}: {label: string; children: React.ReactNode}) {
+function FilterSection({label, children}: { label: string; children: React.ReactNode }) {
     return <Stack gap={6}>
         <Text size="xs" tt="uppercase" fw={700} c="dimmed" style={{letterSpacing: "0.06em"}}>
             {label}

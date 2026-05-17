@@ -1,11 +1,25 @@
-import { Badge, Center, Divider, Group, Loader, Modal, Paper, ScrollArea, SimpleGrid, Stack, Text } from "@mantine/core";
+import {
+    Badge,
+    Center,
+    Divider,
+    Group,
+    Loader,
+    Modal,
+    Paper,
+    ScrollArea,
+    SimpleGrid,
+    Stack,
+    Text,
+} from "@mantine/core";
 import { type FC, useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { fetchFeat, type FeatDetail } from "../api";
+import { type FeatDetail, fetchFeat } from "../api";
 import { FEAT_TYPE_COLORS } from "./featFilterState";
 
-function InfoBlock({label, value}: {label: string; value: string | null | undefined}) {
-    if (!value) return null;
+function InfoBlock({label, value}: { label: string; value: string | null | undefined }) {
+    if (!value) {
+        return null;
+    }
     return <Stack gap={4}>
         <Text size="xs" tt="uppercase" fw={700} c="dimmed" style={{letterSpacing: "0.06em"}}>
             {label}
@@ -15,7 +29,7 @@ function InfoBlock({label, value}: {label: string; value: string | null | undefi
 }
 
 // Keyed by feat ID so it always starts with a fresh (loading) state
-const FeatContent: FC<{id: string}> = ({id}) => {
+const FeatContent: FC<{ id: string }> = ({id}) => {
     const navigate = useNavigate();
     const [feat, setFeat] = useState<FeatDetail | null>(null);
     const [error, setError] = useState<string | null>(null);
@@ -24,14 +38,30 @@ const FeatContent: FC<{id: string}> = ({id}) => {
     useEffect(() => {
         let active = true;
         fetchFeat(id)
-            .then((data) => { if (active) setFeat(data); })
-            .catch((e: Error) => { if (active) setError(e.message); });
-        return () => { active = false; };
+            .then((data) => {
+                if (active) {
+                    setFeat(data);
+                }
+            })
+            .catch((e: Error) => {
+                if (active) {
+                    setError(e.message);
+                }
+            });
+        return () => {
+            active = false;
+        };
     }, [id]);
 
-    if (loading) return <Center py="xl"><Loader/></Center>;
-    if (error) return <Text c="red" ta="center" py="xl">{error}</Text>;
-    if (!feat) return null;
+    if (loading) {
+        return <Center py="xl"><Loader/></Center>;
+    }
+    if (error) {
+        return <Text c="red" ta="center" py="xl">{error}</Text>;
+    }
+    if (!feat) {
+        return null;
+    }
 
     return <Stack gap="md">
         <Stack gap={6}>
@@ -134,7 +164,7 @@ const FeatContent: FC<{id: string}> = ({id}) => {
 };
 
 export const FeatModal: FC = () => {
-    const {id} = useParams<{id: string}>();
+    const {id} = useParams<{ id: string }>();
     const navigate = useNavigate();
     const [opened, setOpened] = useState(true);
 
