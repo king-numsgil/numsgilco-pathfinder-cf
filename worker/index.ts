@@ -4,9 +4,9 @@ import spells from "./routes/spells";
 
 type HonoEnv = { Bindings: Env };
 
-const app = new Hono<HonoEnv>();
+const app = new Hono<HonoEnv>()
+    .route("/api", lookups)
+    .route("/api/spells", spells);
 
-app.route("/api", lookups);
-app.route("/api/spells", spells);
-
+export type AppType = typeof app;
 export default app;

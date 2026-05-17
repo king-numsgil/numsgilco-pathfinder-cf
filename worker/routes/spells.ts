@@ -5,8 +5,6 @@ import * as s from "../db/schema";
 
 type HonoEnv = { Bindings: Env };
 
-const app = new Hono<HonoEnv>();
-
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function parseIds(p: string | undefined): string[] {
@@ -133,152 +131,149 @@ function buildWhere(
     return filters.length > 0 ? and(...filters) : undefined;
 }
 
-// ─── GET /spells ──────────────────────────────────────────────────────────────
+// ─── Routes ───────────────────────────────────────────────────────────────────
 
-app.get("/", async (c) => {
-    const db = createDb(c.env.HYPERDRIVE.connectionString);
+const app = new Hono<HonoEnv>()
+    .get("/", async (c) => {
+        const db = createDb(c.env.HYPERDRIVE.connectionString);
 
-    const rawLimit = parseInt(c.req.query("limit") ?? "50", 10);
-    const rawOffset = parseInt(c.req.query("offset") ?? "0", 10);
-    const limit = Math.min(isNaN(rawLimit) ? 50 : rawLimit, 200);
-    const offset = isNaN(rawOffset) ? 0 : rawOffset;
+        const rawLimit = parseInt(c.req.query("limit") ?? "50", 10);
+        const rawOffset = parseInt(c.req.query("offset") ?? "0", 10);
+        const limit = Math.min(isNaN(rawLimit) ? 50 : rawLimit, 200);
+        const offset = isNaN(rawOffset) ? 0 : rawOffset;
 
-    const searchParams = {
-        q: c.req.query("q"),
-        levels: parseLevels(c.req.query("level")),
-        classIds: parseIds(c.req.query("class")),
-        domainIds: parseIds(c.req.query("domain")),
-        subdomainIds: parseIds(c.req.query("subdomain")),
-        schoolIds: parseIds(c.req.query("school")),
-        subschoolIds: parseIds(c.req.query("subschool")),
-        descriptors: parseIds(c.req.query("descriptor")),
-        bloodlineIds: parseIds(c.req.query("bloodline")),
-        patronIds: parseIds(c.req.query("patron")),
-        mysteryIds: parseIds(c.req.query("mystery")),
-    };
+        const searchParams = {
+            q: c.req.query("q"),
+            levels: parseLevels(c.req.query("level")),
+            classIds: parseIds(c.req.query("class")),
+            domainIds: parseIds(c.req.query("domain")),
+            subdomainIds: parseIds(c.req.query("subdomain")),
+            schoolIds: parseIds(c.req.query("school")),
+            subschoolIds: parseIds(c.req.query("subschool")),
+            descriptors: parseIds(c.req.query("descriptor")),
+            bloodlineIds: parseIds(c.req.query("bloodline")),
+            patronIds: parseIds(c.req.query("patron")),
+            mysteryIds: parseIds(c.req.query("mystery")),
+        };
 
-    const where = buildWhere(db, searchParams);
+        const where = buildWhere(db, searchParams);
 
-    const [{total}, data] = await Promise.all([
-        db.select({total: count()}).from(s.spells).where(where).then((r) => r[0]),
-        db
-            .select({
-                id: s.spells.id,
-                name: s.spells.name,
-                school: s.schools.name,
-                subschool: s.subschools.name,
-                descriptors: s.spells.descriptors,
-                sourcebook: s.spells.sourcebook,
-                rating: s.spells.rating,
-            })
-            .from(s.spells)
-            .leftJoin(s.schools, eq(s.spells.schoolId, s.schools.id))
-            .leftJoin(s.subschools, eq(s.spells.subschoolId, s.subschools.id))
-            .where(where)
-            .orderBy(asc(s.spells.name))
-            .limit(limit)
-            .offset(offset),
-    ]);
+        const [{total}, data] = await Promise.all([
+            db.select({total: count()}).from(s.spells).where(where).then((r) => r[0]),
+            db
+                .select({
+                    id: s.spells.id,
+                    name: s.spells.name,
+                    school: s.schools.name,
+                    subschool: s.subschools.name,
+                    descriptors: s.spells.descriptors,
+                    sourcebook: s.spells.sourcebook,
+                    rating: s.spells.rating,
+                })
+                .from(s.spells)
+                .leftJoin(s.schools, eq(s.spells.schoolId, s.schools.id))
+                .leftJoin(s.subschools, eq(s.spells.subschoolId, s.subschools.id))
+                .where(where)
+                .orderBy(asc(s.spells.name))
+                .limit(limit)
+                .offset(offset),
+        ]);
 
-    return c.json({data, total, limit, offset});
-});
+        return c.json({data, total, limit, offset});
+    })
+    .get("/:id", async (c) => {
+        const db = createDb(c.env.HYPERDRIVE.connectionString);
+        const id = c.req.param("id");
 
-// ─── GET /spells/:id ──────────────────────────────────────────────────────────
-
-app.get("/:id", async (c) => {
-    const db = createDb(c.env.HYPERDRIVE.connectionString);
-    const id = c.req.param("id");
-
-    const spell = await db.query.spells.findFirst({
-        where: eq(s.spells.id, id),
-        with: {
-            school: true,
-            subschool: true,
-            deity: true,
-            spellClasses: {
-                with: {class: true},
-                orderBy: (sc, {asc: a}) => [a(sc.level)],
+        const spell = await db.query.spells.findFirst({
+            where: eq(s.spells.id, id),
+            with: {
+                school: true,
+                subschool: true,
+                deity: true,
+                spellClasses: {
+                    with: {class: true},
+                    orderBy: (sc, {asc: a}) => [a(sc.level)],
+                },
+                domainSpells: {
+                    with: {domain: true},
+                    orderBy: (ds, {asc: a}) => [a(ds.level)],
+                },
+                subdomainSpells: {
+                    with: {subdomain: true},
+                    orderBy: (ss, {asc: a}) => [a(ss.level)],
+                },
+                bloodlineSpells: {
+                    with: {bloodline: true},
+                    orderBy: (bs, {asc: a}) => [a(bs.classLevel)],
+                },
+                patronSpells: {
+                    with: {patron: true},
+                    orderBy: (ps, {asc: a}) => [a(ps.classLevel)],
+                },
+                mysterySpells: {
+                    with: {mystery: true},
+                    orderBy: (ms, {asc: a}) => [a(ms.classLevel)],
+                },
             },
-            domainSpells: {
-                with: {domain: true},
-                orderBy: (ds, {asc: a}) => [a(ds.level)],
+        });
+
+        if (!spell) {
+            return c.json({error: "Not found"} as const, 404);
+        }
+
+        return c.json({
+            id: spell.id,
+            name: spell.name,
+            link: spell.link,
+            description: spell.description,
+            mythicText: spell.mythicText,
+            augmented: spell.augmented,
+            rating: spell.rating,
+
+            school: spell.school ?? null,
+            subschool: spell.subschool ?? null,
+            deity: spell.deity ?? null,
+            descriptors: spell.descriptors,
+
+            castingTime: spell.castingTime,
+            range: spell.range,
+            area: spell.area,
+            effect: spell.effect,
+            targets: spell.targets,
+            duration: spell.duration,
+            savingThrow: spell.savingThrow,
+            spellResistance: spell.spellResistance,
+            sourcebook: spell.sourcebook,
+
+            components: {
+                verbal: spell.verbal,
+                somatic: spell.somatic,
+                material: spell.material,
+                focus: spell.focus,
+                divineFocus: spell.divineFocus,
+                cost: spell.componentCost,
             },
-            subdomainSpells: {
-                with: {subdomain: true},
-                orderBy: (ss, {asc: a}) => [a(ss.level)],
-            },
-            bloodlineSpells: {
-                with: {bloodline: true},
-                orderBy: (bs, {asc: a}) => [a(bs.classLevel)],
-            },
-            patronSpells: {
-                with: {patron: true},
-                orderBy: (ps, {asc: a}) => [a(ps.classLevel)],
-            },
-            mysterySpells: {
-                with: {mystery: true},
-                orderBy: (ms, {asc: a}) => [a(ms.classLevel)],
-            },
-        },
+            dismissible: spell.dismissible,
+            shapeable: spell.shapeable,
+
+            permanency: spell.permanency
+                ? {cl: spell.permanencyCl, cost: spell.permanencyCost}
+                : null,
+            slaLevel: spell.slaLevel,
+            race: spell.race,
+
+            classes: spell.spellClasses.map((sc) => ({...sc.class, level: sc.level})),
+            domains: spell.domainSpells.map((ds) => ({...ds.domain, level: ds.level})),
+            subdomains: spell.subdomainSpells.map((ss) => ({...ss.subdomain, level: ss.level})),
+            bloodlines: spell.bloodlineSpells.map((bs) => ({...bs.bloodline, classLevel: bs.classLevel})),
+            patrons: spell.patronSpells.map((ps) => ({...ps.patron, classLevel: ps.classLevel})),
+            mysteries: spell.mysterySpells.map((ms) => ({
+                ...ms.mystery,
+                classLevel: ms.classLevel,
+                note: ms.note,
+            })),
+        });
     });
-
-    if (!spell) {
-        return c.json({error: "Not found"}, 404);
-    }
-
-    // Reshape into a clean response
-    return c.json({
-        id: spell.id,
-        name: spell.name,
-        link: spell.link,
-        description: spell.description,
-        mythicText: spell.mythicText,
-        augmented: spell.augmented,
-        rating: spell.rating,
-
-        school: spell.school ?? null,
-        subschool: spell.subschool ?? null,
-        deity: spell.deity ?? null,
-        descriptors: spell.descriptors,
-
-        castingTime: spell.castingTime,
-        range: spell.range,
-        area: spell.area,
-        effect: spell.effect,
-        targets: spell.targets,
-        duration: spell.duration,
-        savingThrow: spell.savingThrow,
-        spellResistance: spell.spellResistance,
-        sourcebook: spell.sourcebook,
-
-        components: {
-            verbal: spell.verbal,
-            somatic: spell.somatic,
-            material: spell.material,
-            focus: spell.focus,
-            divineFocus: spell.divineFocus,
-            cost: spell.componentCost,
-        },
-        dismissible: spell.dismissible,
-        shapeable: spell.shapeable,
-
-        permanency: spell.permanency
-            ? {cl: spell.permanencyCl, cost: spell.permanencyCost}
-            : null,
-        slaLevel: spell.slaLevel,
-        race: spell.race,
-
-        classes: spell.spellClasses.map((sc) => ({...sc.class, level: sc.level})),
-        domains: spell.domainSpells.map((ds) => ({...ds.domain, level: ds.level})),
-        subdomains: spell.subdomainSpells.map((ss) => ({...ss.subdomain, level: ss.level})),
-        bloodlines: spell.bloodlineSpells.map((bs) => ({...bs.bloodline, classLevel: bs.classLevel})),
-        patrons: spell.patronSpells.map((ps) => ({...ps.patron, classLevel: ps.classLevel})),
-        mysteries: spell.mysterySpells.map((ms) => ({
-            ...ms.mystery,
-            classLevel: ms.classLevel,
-            note: ms.note,
-        })),
-    });
-});
 
 export default app;

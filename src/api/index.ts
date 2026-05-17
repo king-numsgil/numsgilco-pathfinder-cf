@@ -1,65 +1,21 @@
-// ─── Response types ───────────────────────────────────────────────────────────
+import { hc } from "hono/client";
+import type { InferResponseType } from "hono/client";
+import type { AppType } from "../../worker";
 
-export type LookupItem = { id: string; name: string };
+const client = hc<AppType>(window.location.origin);
 
-export type SpellListItem = {
-    id: string;
-    name: string;
-    school: string | null;
-    subschool: string | null;
-    descriptors: string[];
-    sourcebook: string;
-    rating: number | null;
-};
+// ─── Response types (derived from the worker's route return types) ─────────────
+// No manual duplication — TypeScript infers these from the Hono app schema.
 
-export type SpellListResponse = {
-    data: SpellListItem[];
-    total: number;
-    limit: number;
-    offset: number;
-};
+export type LookupItem = InferResponseType<typeof client.api.schools.$get>[number];
+export type DomainWithSubdomains = InferResponseType<typeof client.api.domains.$get>[number];
+export type SpellListResponse = InferResponseType<typeof client.api.spells.$get>;
+export type SpellListItem = SpellListResponse["data"][number];
+export type SpellDetail = InferResponseType<(typeof client.api.spells)[":id"]["$get"], 200>;
 
-export type SpellDetail = {
-    id: string;
-    name: string;
-    link: string | null;
-    description: string;
-    mythicText: string | null;
-    augmented: string | null;
-    rating: number | null;
-    school: LookupItem | null;
-    subschool: LookupItem | null;
-    deity: LookupItem | null;
-    descriptors: string[];
-    castingTime: string;
-    range: string;
-    area: string | null;
-    effect: string | null;
-    targets: string | null;
-    duration: string;
-    savingThrow: string | null;
-    spellResistance: string | null;
-    sourcebook: string;
-    components: {
-        verbal: boolean;
-        somatic: boolean;
-        material: boolean;
-        focus: boolean;
-        divineFocus: boolean;
-        cost: number | null;
-    };
-    dismissible: boolean;
-    shapeable: boolean;
-    permanency: { cl: number | null; cost: number | null } | null;
-    slaLevel: number | null;
-    race: string | null;
-    classes: Array<LookupItem & { level: number }>;
-    domains: Array<LookupItem & { level: number }>;
-    subdomains: Array<LookupItem & { level: number }>;
-    bloodlines: Array<LookupItem & { classLevel: number }>;
-    patrons: Array<LookupItem & { classLevel: number }>;
-    mysteries: Array<LookupItem & { classLevel: number; note: string | null }>;
-};
+// ─── Request params ───────────────────────────────────────────────────────────
+// Defined manually: the worker routes use ad-hoc c.req.query() without Zod
+// validators, so InferRequestType has nothing to derive from.
 
 export type SpellSearchParams = {
     q?: string;
@@ -77,70 +33,80 @@ export type SpellSearchParams = {
     offset?: number;
 };
 
-export type DomainWithSubdomains = LookupItem & { subdomains: LookupItem[] };
-
 // ─── Fetch helpers ────────────────────────────────────────────────────────────
 
-function buildUrl(path: string, params: Record<string, string | number | undefined>): string {
-    const url = new URL(path, window.location.origin);
-    for (const [k, v] of Object.entries(params)) {
-        if (v !== undefined && v !== "") {
-            url.searchParams.set(k, String(v));
-        }
-    }
-    return url.toString();
-}
+export const fetchSchools = async (): Promise<LookupItem[]> => {
+    const res = await client.api.schools.$get();
+    if (!res.ok) throw new Error("Failed to fetch schools");
+    return res.json();
+};
 
-async function fetchLookup(path: string): Promise<LookupItem[]> {
-    const res = await fetch(path);
-    if (!res.ok) {
-        throw new Error(`Failed to fetch ${path}`);
-    }
-    return res.json() as Promise<LookupItem[]>;
-}
+export const fetchSubschools = async (): Promise<LookupItem[]> => {
+    const res = await client.api.subschools.$get();
+    if (!res.ok) throw new Error("Failed to fetch subschools");
+    return res.json();
+};
 
-export const fetchSchools = () => fetchLookup("/api/schools");
-export const fetchSubschools = () => fetchLookup("/api/subschools");
-export const fetchClasses = () => fetchLookup("/api/classes");
-export const fetchBloodlines = () => fetchLookup("/api/bloodlines");
-export const fetchPatrons = () => fetchLookup("/api/patrons");
-export const fetchMysteries = () => fetchLookup("/api/mysteries");
+export const fetchClasses = async (): Promise<LookupItem[]> => {
+    const res = await client.api.classes.$get();
+    if (!res.ok) throw new Error("Failed to fetch classes");
+    return res.json();
+};
 
-export async function fetchDescriptors(): Promise<string[]> {
-    const res = await fetch("/api/descriptors");
-    if (!res.ok) throw new Error("Failed to fetch descriptors");
-    return res.json() as Promise<string[]>;
-}
+export const fetchBloodlines = async (): Promise<LookupItem[]> => {
+    const res = await client.api.bloodlines.$get();
+    if (!res.ok) throw new Error("Failed to fetch bloodlines");
+    return res.json();
+};
+
+export const fetchPatrons = async (): Promise<LookupItem[]> => {
+    const res = await client.api.patrons.$get();
+    if (!res.ok) throw new Error("Failed to fetch patrons");
+    return res.json();
+};
+
+export const fetchMysteries = async (): Promise<LookupItem[]> => {
+    const res = await client.api.mysteries.$get();
+    if (!res.ok) throw new Error("Failed to fetch mysteries");
+    return res.json();
+};
 
 export async function fetchDomains(): Promise<DomainWithSubdomains[]> {
-    const res = await fetch("/api/domains");
-    if (!res.ok) {
-        throw new Error("Failed to fetch domains");
-    }
-    return res.json() as Promise<DomainWithSubdomains[]>;
+    const res = await client.api.domains.$get();
+    if (!res.ok) throw new Error("Failed to fetch domains");
+    return res.json();
+}
+
+export async function fetchDescriptors(): Promise<string[]> {
+    const res = await client.api.descriptors.$get();
+    if (!res.ok) throw new Error("Failed to fetch descriptors");
+    return res.json();
 }
 
 export async function fetchSpells(params: SpellSearchParams): Promise<SpellListResponse> {
-    const res = await fetch(
-        buildUrl("/api/spells", {
-            ...(params as Record<string, string | number | undefined>),
-            limit: params.limit ?? 50,
-            offset: params.offset ?? 0,
-        }),
-    );
-    if (!res.ok) {
-        throw new Error("Failed to fetch spells");
-    }
-    return res.json() as Promise<SpellListResponse>;
+    const query: Record<string, string> = {};
+    if (params.q) query.q = params.q;
+    if (params.level) query.level = params.level;
+    if (params.school) query.school = params.school;
+    if (params.subschool) query.subschool = params.subschool;
+    if (params.descriptor) query.descriptor = params.descriptor;
+    if (params.class) query.class = params.class;
+    if (params.domain) query.domain = params.domain;
+    if (params.subdomain) query.subdomain = params.subdomain;
+    if (params.bloodline) query.bloodline = params.bloodline;
+    if (params.patron) query.patron = params.patron;
+    if (params.mystery) query.mystery = params.mystery;
+    if (params.limit !== undefined) query.limit = String(params.limit);
+    if (params.offset !== undefined) query.offset = String(params.offset);
+
+    const res = await client.api.spells.$get({query});
+    if (!res.ok) throw new Error("Failed to fetch spells");
+    return res.json();
 }
 
 export async function fetchSpell(id: string): Promise<SpellDetail> {
-    const res = await fetch(`/api/spells/${encodeURIComponent(id)}`);
-    if (res.status === 404) {
-        throw new Error("Spell not found");
-    }
-    if (!res.ok) {
-        throw new Error("Failed to fetch spell");
-    }
-    return res.json() as Promise<SpellDetail>;
+    const res = await client.api.spells[":id"].$get({param: {id}});
+    if (res.status === 404) throw new Error("Spell not found");
+    if (!res.ok) throw new Error("Failed to fetch spell");
+    return res.json();
 }
