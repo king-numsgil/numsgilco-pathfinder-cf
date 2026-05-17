@@ -61,6 +61,12 @@ drizzle.config.ts      — Reads .env for DB URL; used by drizzle-kit commands
 - **vanilla-extract** `.css.ts` files are co-located next to the components that use them.
 - `src/data/feats.ts` is still static placeholder data — the Feats page is not yet wired to the real API.
 
+### Code style
+
+- **Component type**: Arrow functions with an explicit `FC` type — `export const Foo: FC = () => ...`. Never `function Foo()` for components, never `React.FC`.
+- **JSX returns**: No parentheses around the returned JSX. Return the element directly — `return <Div ...>`. Wrap in a fragment if multiple roots are needed.
+- **Props interfaces**: Declared inline above the component as a plain `interface`, not a type alias, and not passed as a generic to `FC` — `const Foo: FC = () => ...` with `interface FooProps { ... }` used only inside the file.
+
 ### React patterns enforced by ESLint
 
 - **`eslint-plugin-react-hooks` v7** (`set-state-in-effect` rule): calling `setState` synchronously in a `useEffect` body is an error. All state updates must be inside async callbacks, `startTransition`, or Promise `.then()` handlers.
