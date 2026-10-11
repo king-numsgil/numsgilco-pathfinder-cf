@@ -13,22 +13,48 @@ export const EMPTY_FEAT_FILTERS: FeatFilterState = {
     maxCl: "",
 };
 
+// Mantine palette colors, readable in dark mode (light/outline variants, and
+// filled thanks to theme.autoContrast). Colors repeat across families only
+// where the types rarely appear on the same feat; types that co-occur with
+// Combat (Critical, Style, Teamwork, Grit, …) all differ from it and each other.
 export const FEAT_TYPE_COLORS: Record<string, string> = {
-    Combat: "orange",
+    // Core
     General: "gray",
-    Teamwork: "blue",
-    Metamagic: "violet",
+    Combat: "red",
+    Mythic: "pink",
+    Story: "blue",
+    Achievement: "yellow",
+    Racial: "lime",
+    Monster: "grape",
+
+    // Martial — commonly paired with Combat
+    Critical: "orange",
     Style: "yellow",
-    Grit: "red",
+    Teamwork: "blue",
+    Grit: "lime",
+    Performance: "grape",
+    Stare: "cyan",
+    Betrayal: "violet",
+    Targeting: "teal",
+    Trick: "teal",
+
+    // Magic
+    Metamagic: "violet",
     "Item Creation": "teal",
-    "Item Mastery": "cyan",
+    "Blood Hex": "grape",
+    Conduit: "indigo",
+    Esoteric: "indigo",
+    Meditation: "cyan",
+
+    // Mastery
     "Armor Mastery": "indigo",
     "Shield Mastery": "indigo",
     "Weapon Mastery": "indigo",
-    "Blood Hex": "grape",
+    "Item Mastery": "indigo",
+
+    // Companions
     "Companion/Familiar": "green",
-    Mythic: "pink",
-    Achievement: "lime",
+    Familiar: "green",
 };
 
 // URL query params mirror the /api/feats param names

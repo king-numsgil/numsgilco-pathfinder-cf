@@ -73,6 +73,17 @@ await using view = new Bun.WebView({
 // Headless Chrome won't size its window below 500px wide, so emulate the
 // device viewport via DevTools instead (the first navigate opens the session)
 await view.navigate("about:blank");
+
+// Uncaught exceptions never go through console.*; collect them via DevTools
+interface ExceptionThrown {
+    exceptionDetails: { text: string; exception?: { description?: string } };
+}
+await view.cdp("Runtime.enable");
+view.addEventListener("Runtime.exceptionThrown", (event) => {
+    const {exceptionDetails} = (event as MessageEvent<ExceptionThrown>).data;
+    const description = exceptionDetails.exception?.description ?? exceptionDetails.text;
+    pageLogs.push(`[uncaught] ${description.split("\n").slice(0, 4).join("\n    ")}`);
+});
 await view.cdp("Emulation.setDeviceMetricsOverride", {
     width,
     height,

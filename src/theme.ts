@@ -17,6 +17,9 @@ export const theme = createTheme({
     fontFamily: "system-ui, -apple-system, 'Segoe UI', sans-serif",
     fontFamilyMonospace: "ui-monospace, 'Cascadia Code', Consolas, monospace",
     primaryColor: "teal",
+    // Filled badges/buttons pick black or white text by background luminance
+    // (white on yellow/lime/orange is unreadable)
+    autoContrast: true,
     defaultRadius: "md",
     colors: {
         dark: forestDark,

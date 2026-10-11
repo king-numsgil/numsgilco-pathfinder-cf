@@ -10,6 +10,8 @@ const app = new Hono<HonoEnv>()
     .route("/api", lookups)
     .route("/api/spells", spells)
     .route("/api/feats", feats)
+    // Only /api/* reaches the Worker (run_worker_first); everything else is the SPA
+    .notFound((c) => c.json({error: "Not found"}, 404))
     .onError((err, c) => {
         if (err instanceof HTTPException) {
             return err.getResponse();
