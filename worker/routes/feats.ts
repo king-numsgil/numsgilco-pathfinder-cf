@@ -4,14 +4,11 @@ import { Hono } from "hono";
 import { z } from "zod";
 import { createDb } from "../db";
 import * as s from "../db/schema";
+import { escapeLike, paginationSchema, parseIds } from "./params";
 
 type HonoEnv = { Bindings: Env };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
-
-function parseIds(p: string | undefined): string[] {
-    return p ? p.split(",").map((x) => x.trim()).filter(Boolean) : [];
-}
 
 function buildWhere(params: {
     q?: string;
@@ -23,7 +20,7 @@ function buildWhere(params: {
     const filters: SQL[] = [];
 
     if (q) {
-        filters.push(ilike(s.feats.name, `%${q}%`));
+        filters.push(ilike(s.feats.name, `%${escapeLike(q)}%`));
     }
 
     if (types.length) {
@@ -34,14 +31,14 @@ function buildWhere(params: {
         )}]::text[]`);
     }
 
-    if (maxBab !== undefined && !isNaN(maxBab)) {
+    if (maxBab !== undefined) {
         filters.push(or(
             sql`${s.feats.minBab} IS NULL`,
             sql`${s.feats.minBab} <= ${maxBab}`,
         )!);
     }
 
-    if (maxCl !== undefined && !isNaN(maxCl)) {
+    if (maxCl !== undefined) {
         filters.push(or(
             sql`${s.feats.minCasterLevel} IS NULL`,
             sql`${s.feats.minCasterLevel} <= ${maxCl}`,
@@ -56,10 +53,9 @@ function buildWhere(params: {
 export const featsQuerySchema = z.object({
     q: z.string().optional(),
     type: z.string().optional(),
-    maxBab: z.string().optional(),
-    maxCl: z.string().optional(),
-    limit: z.string().optional(),
-    offset: z.string().optional(),
+    maxBab: z.coerce.number().int().min(0).max(20).optional(),
+    maxCl: z.coerce.number().int().min(0).max(20).optional(),
+    ...paginationSchema,
 });
 
 // ─── Routes ───────────────────────────────────────────────────────────────────
@@ -67,12 +63,7 @@ export const featsQuerySchema = z.object({
 const app = new Hono<HonoEnv>()
     .get("/", zValidator("query", featsQuerySchema), async (c) => {
         const db = createDb(c.env.HYPERDRIVE.connectionString);
-        const {q, type, maxBab: rawMaxBab, maxCl: rawMaxCl, limit: rawLimit, offset: rawOffset} = c.req.valid("query");
-
-        const limit = Math.min(parseInt(rawLimit ?? "50", 10) || 50, 200);
-        const offset = parseInt(rawOffset ?? "0", 10) || 0;
-        const maxBab = rawMaxBab !== undefined ? parseInt(rawMaxBab, 10) : undefined;
-        const maxCl = rawMaxCl !== undefined ? parseInt(rawMaxCl, 10) : undefined;
+        const {q, type, maxBab, maxCl, limit, offset} = c.req.valid("query");
 
         const params = {
             q,
@@ -148,11 +139,13 @@ const app = new Hono<HonoEnv>()
             requires: feat.prerequisiteLinks.map((l) => ({
                 id: l.requiredFeat.id,
                 name: l.requiredFeat.name,
+                types: l.requiredFeat.types,
                 note: l.note,
             })),
             requiredBy: feat.dependentLinks.map((l) => ({
                 id: l.feat.id,
                 name: l.feat.name,
+                types: l.feat.types,
             })).sort((a, b) => a.name.localeCompare(b.name)),
         });
     });

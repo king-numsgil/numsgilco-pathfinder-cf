@@ -6,10 +6,11 @@
 	"scripts": {
 		"dev": "vite",
 		"build": "tsc -b && vite build",
-		"lint": "eslint .",
+		"lint": "eslint . --max-warnings 0",
 		"preview": "bun run build && vite preview",
 		"deploy": "bun run build && wrangler deploy",
 		"cf-typegen": "wrangler types",
+		"ui": "bun scripts/ui.ts",
 		"db:push": "drizzle-kit push",
 		"db:generate": "drizzle-kit generate",
 		"db:studio": "drizzle-kit studio",
@@ -64,7 +65,7 @@
 		"postcss": "^8.5.29",
 		"postcss-preset-mantine": "^1.18.0",
 		"postcss-simple-vars": "^7.0.1",
-		"typescript": "~7.0.2",
+		"typescript": "~6.0.3",
 		"typescript-eslint": "^8.71.1",
 		"vite": "^8.3.4",
 		"wrangler": "^4.149.0"

@@ -1,8 +1,22 @@
-import { Badge, Button, Center, Group, Indicator, Loader, Stack, Table, Text, TextInput, Title } from "@mantine/core";
-import { useDebouncedValue } from "@mantine/hooks";
-import { type FC, useEffect, useRef, useState, useTransition } from "react";
-import { FiFilter, FiSearch } from "react-icons/fi";
-import { Outlet, useNavigate } from "react-router-dom";
+import {
+    Anchor,
+    Badge,
+    Button,
+    Center,
+    Group,
+    Indicator,
+    Loader,
+    Stack,
+    Table,
+    Text,
+    TextInput,
+    Title,
+    Tooltip,
+    UnstyledButton,
+} from "@mantine/core";
+import { type FC, useEffect, useState } from "react";
+import { FiArrowDown, FiFilter, FiSearch } from "react-icons/fi";
+import { Link, useNavigate, useOutlet, useSearchParams } from "react-router-dom";
 import {
     type DomainWithSubdomains,
     fetchBloodlines,
@@ -17,57 +31,74 @@ import {
     type LookupItem,
     type SpellListItem,
 } from "../api";
+import { ListError, ListFooter } from "./ListFooter";
+import { FROM_LIST, useUrlSearch } from "./listNavigation";
 import { SpellFilters } from "./SpellFilters";
-import { activeFilterCount, EMPTY_FILTERS, type FilterState } from "./spellFilterState";
+import {
+    activeFilterCount,
+    EMPTY_FILTERS,
+    type FilterState,
+    filtersFromParams,
+    SCHOOL_COLORS,
+    type SpellSort,
+    sortFromParams,
+    spellQueryFromParams,
+    withFilters,
+} from "./spellFilterState";
+import { PAGE_SIZE, useInfiniteList } from "./useInfiniteList";
 
-const PAGE_SIZE = 50;
+interface Lookups {
+    schools: LookupItem[];
+    subschools: LookupItem[];
+    descriptors: string[];
+    classes: LookupItem[];
+    domains: DomainWithSubdomains[];
+    bloodlines: LookupItem[];
+    patrons: LookupItem[];
+    mysteries: LookupItem[];
+}
 
-const schoolColors: Record<string, string> = {
-    Abjuration: "blue",
-    Conjuration: "teal",
-    Divination: "violet",
-    Enchantment: "pink",
-    Evocation: "red",
-    Illusion: "grape",
-    Necromancy: "dark",
-    Transmutation: "green",
-    Universal: "gray",
+const EMPTY_LOOKUPS: Lookups = {
+    schools: [],
+    subschools: [],
+    descriptors: [],
+    classes: [],
+    domains: [],
+    bloodlines: [],
+    patrons: [],
+    mysteries: [],
 };
+
+interface SortHeaderProps {
+    label: string;
+    column: SpellSort;
+    sort: SpellSort;
+    onSort: (column: SpellSort) => void;
+}
+
+const SortHeader: FC<SortHeaderProps> = ({label, column, sort, onSort}) =>
+    <UnstyledButton onClick={() => onSort(column)} fw={700} fz="sm">
+        <Group gap={4} wrap="nowrap">
+            {label}
+            {sort === column && <FiArrowDown size={12}/>}
+        </Group>
+    </UnstyledButton>;
 
 export const Spells: FC = () => {
     const navigate = useNavigate();
+    const outlet = useOutlet();
+    const [searchParams, setSearchParams] = useSearchParams();
+    const [search, setSearch] = useUrlSearch();
 
-    const [search, setSearch] = useState("");
-    const [debouncedSearch] = useDebouncedValue(search, 300);
-
-    const [filters, setFilters] = useState<FilterState>(EMPTY_FILTERS);
+    const filters = filtersFromParams(searchParams);
+    const sort = sortFromParams(searchParams);
     const [drawerOpen, setDrawerOpen] = useState(false);
 
-    // Lookup data
-    const [schools, setSchools] = useState<LookupItem[]>([]);
-    const [subschools, setSubschools] = useState<LookupItem[]>([]);
-    const [descriptorOptions, setDescriptorOptions] = useState<string[]>([]);
-    const [classes, setClasses] = useState<LookupItem[]>([]);
-    const [domains, setDomains] = useState<DomainWithSubdomains[]>([]);
-    const [bloodlines, setBloodlines] = useState<LookupItem[]>([]);
-    const [patrons, setPatrons] = useState<LookupItem[]>([]);
-    const [mysteries, setMysteries] = useState<LookupItem[]>([]);
+    const [lookups, setLookups] = useState<Lookups>(EMPTY_LOOKUPS);
+    const [lookupError, setLookupError] = useState(false);
+    const [lookupToken, setLookupToken] = useState(0);
 
-    // Results
-    const [results, setResults] = useState<SpellListItem[]>([]);
-    const [total, setTotal] = useState(0);
-    const [error, setError] = useState<string | null>(null);
-    const [hasLoaded, setHasLoaded] = useState(false);
-    const [loadingMore, setLoadingMore] = useState(false);
-
-    const [isPending, startTransition] = useTransition();
-
-    const fetchSeq = useRef(0);
-    const loadMoreSeq = useRef(0);
-    const sentinelRef = useRef<HTMLDivElement>(null);
-    const isLoadingMoreRef = useRef(false);
-
-    // Load all lookup data in parallel on mount
+    // Load all lookup data in parallel (cached after the first success)
     useEffect(() => {
         Promise.all([
             fetchSchools(),
@@ -78,154 +109,55 @@ export const Spells: FC = () => {
             fetchBloodlines(),
             fetchPatrons(),
             fetchMysteries(),
-        ]).then(([s, ss, desc, c, d, b, p, m]) => {
-            setSchools(s);
-            setSubschools(ss);
-            setDescriptorOptions(desc);
-            setClasses(c);
-            setDomains(d);
-            setBloodlines(b);
-            setPatrons(p);
-            setMysteries(m);
-        }).catch(() => {/* non-fatal */
+        ]).then(([schools, subschools, descriptors, classes, domains, bloodlines, patrons, mysteries]) => {
+            setLookups({schools, subschools, descriptors, classes, domains, bloodlines, patrons, mysteries});
+            setLookupError(false);
+        }).catch(() => {
+            setLookupError(true);
         });
-    }, []);
+    }, [lookupToken]);
 
-    // Stable string keys for array filters (used as effect deps)
-    const levelKey = filters.levels.join(",");
-    const schoolKey = filters.schoolIds.join(",");
-    const subschoolKey = filters.subschoolIds.join(",");
-    const descriptorKey = filters.descriptors.join(",");
-    const classKey = filters.classIds.join(",");
-    const domainKey = filters.domainIds.join(",");
-    const subdomainKey = filters.subdomainIds.join(",");
-    const bloodlineKey = filters.bloodlineIds.join(",");
-    const patronKey = filters.patronIds.join(",");
-    const mysteryKey = filters.mysteryIds.join(",");
+    const query = spellQueryFromParams(searchParams);
+    const list = useInfiniteList<SpellListItem>(
+        (offset) => fetchSpells({...query, limit: String(PAGE_SIZE), offset: String(offset)}),
+        JSON.stringify(query),
+    );
 
-    // Re-fetch first page whenever any filter changes
-    useEffect(() => {
-        const seq = ++fetchSeq.current;
-        ++loadMoreSeq.current;        // invalidate any in-flight loadMore
-        isLoadingMoreRef.current = false;
+    const setFilters = (next: FilterState) =>
+        setSearchParams((prev) => withFilters(prev, next), {replace: true});
 
-        startTransition(async () => {
-            try {
-                const data = await fetchSpells({
-                    q: debouncedSearch || undefined,
-                    level: levelKey || undefined,
-                    school: schoolKey || undefined,
-                    subschool: subschoolKey || undefined,
-                    descriptor: descriptorKey || undefined,
-                    class: classKey || undefined,
-                    domain: domainKey || undefined,
-                    subdomain: subdomainKey || undefined,
-                    bloodline: bloodlineKey || undefined,
-                    patron: patronKey || undefined,
-                    mystery: mysteryKey || undefined,
-                    limit: String(PAGE_SIZE),
-                    offset: "0",
-                });
-                if (seq !== fetchSeq.current) {
-                    return;
-                }
-                setResults(data.data);
-                setTotal(data.total);
-                setError(null);
-            } catch {
-                if (seq !== fetchSeq.current) {
-                    return;
-                }
-                setError("Failed to load spells.");
-            } finally {
-                if (seq === fetchSeq.current) {
-                    setHasLoaded(true);
-                }
+    const handleFilterChange = <K extends keyof FilterState>(key: K, value: FilterState[K]) =>
+        setFilters({...filters, [key]: value});
+
+    const handleSort = (column: SpellSort) =>
+        setSearchParams((prev) => {
+            const next = new URLSearchParams(prev);
+            if (column === "name") {
+                next.delete("sort");
+            } else {
+                next.set("sort", column);
             }
-        });
-    }, [debouncedSearch, levelKey, schoolKey, subschoolKey, descriptorKey, classKey, domainKey, subdomainKey, bloodlineKey, patronKey, mysteryKey]);
+            return next;
+        }, {replace: true});
 
-    // Infinite scroll — no dep array so the closure always sees current values.
-    // Early-return keeps setup cost near zero when there's nothing to load.
-    useEffect(() => {
-        const sentinel = sentinelRef.current;
-        if (!sentinel || !hasLoaded || isPending || results.length >= total) {
-            return;
-        }
-
-        const myLmSeq = loadMoreSeq.current;
-
-        const observer = new IntersectionObserver(
-            (entries) => {
-                if (!entries[0].isIntersecting) {
-                    return;
-                }
-                if (isLoadingMoreRef.current) {
-                    return;
-                }
-                if (loadMoreSeq.current !== myLmSeq) {
-                    return;
-                }
-
-                isLoadingMoreRef.current = true;
-                setLoadingMore(true);
-                fetchSpells({
-                    q: debouncedSearch || undefined,
-                    level: levelKey || undefined,
-                    school: schoolKey || undefined,
-                    subschool: subschoolKey || undefined,
-                    descriptor: descriptorKey || undefined,
-                    class: classKey || undefined,
-                    domain: domainKey || undefined,
-                    subdomain: subdomainKey || undefined,
-                    bloodline: bloodlineKey || undefined,
-                    patron: patronKey || undefined,
-                    mystery: mysteryKey || undefined,
-                    limit: String(PAGE_SIZE),
-                    offset: String(results.length),
-                }).then((data) => {
-                    if (loadMoreSeq.current !== myLmSeq) {
-                        return;
-                    }
-                    setResults((prev) => [...prev, ...data.data]);
-                    setTotal(data.total);
-                }).catch(() => {
-                    setError("Failed to load more spells.");
-                }).finally(() => {
-                    if (loadMoreSeq.current === myLmSeq) {
-                        isLoadingMoreRef.current = false;
-                        setLoadingMore(false);
-                    }
-                });
-            },
-            {rootMargin: "200px"},
-        );
-
-        observer.observe(sentinel);
-        return () => observer.disconnect();
-    });
-
-    function handleFilterChange<K extends keyof FilterState>(key: K, value: FilterState[K]) {
-        setFilters((prev) => ({...prev, [key]: value}));
-    }
+    const spellLink = (id: string) => ({pathname: `/spells/${id}`, search: searchParams.toString()});
 
     const filterCount = activeFilterCount(filters);
-    const initialLoading = !hasLoaded;
+    const {results, total, hasLoaded, isPending} = list;
 
     return <Stack gap="lg">
-        <title>Spells — Pathfinder 1E</title>
+        {!outlet && <title>Spells — Pathfinder 1E</title>}
         <div>
             <Title order={2}>Spells</Title>
             <Text size="sm" c="dimmed" mt={4}>
-                {initialLoading
-                    ? "Loading…"
-                    : `Showing ${results.length} of ${total} spells`}
+                {hasLoaded ? `Showing ${results.length} of ${total} spells` : "Loading…"}
             </Text>
         </div>
 
         <Group gap="sm" align="flex-end">
             <TextInput
                 placeholder="Search by name…"
+                aria-label="Search spells by name"
                 leftSection={<FiSearch size={16}/>}
                 value={search}
                 onChange={(e) => setSearch(e.currentTarget.value)}
@@ -254,19 +186,14 @@ export const Spells: FC = () => {
             filters={filters}
             onChange={handleFilterChange}
             onClear={() => setFilters(EMPTY_FILTERS)}
-            schools={schools}
-            subschools={subschools}
-            descriptorOptions={descriptorOptions}
-            classes={classes}
-            domains={domains}
-            bloodlines={bloodlines}
-            patrons={patrons}
-            mysteries={mysteries}
+            lookupError={lookupError}
+            onRetryLookups={() => setLookupToken((t) => t + 1)}
+            {...lookups}
         />
 
-        {error && <Text c="red" size="sm">{error}</Text>}
+        {list.error && <ListError message="Failed to load spells." onRetry={list.retry}/>}
 
-        <Table.ScrollContainer minWidth={680}>
+        <Table.ScrollContainer minWidth={740}>
             <Table
                 striped
                 highlightOnHover
@@ -276,79 +203,96 @@ export const Spells: FC = () => {
             >
                 <Table.Thead>
                     <Table.Tr>
-                        <Table.Th style={{minWidth: 180}}>Name</Table.Th>
+                        <Table.Th style={{minWidth: 180}} aria-sort={sort === "name" ? "ascending" : undefined}>
+                            <SortHeader label="Name" column="name" sort={sort} onSort={handleSort}/>
+                        </Table.Th>
+                        <Table.Th style={{width: 70}} aria-sort={sort === "level" ? "ascending" : undefined}>
+                            <Tooltip
+                                label="Lowest level among the selected sources, or any source if none is selected"
+                                multiline
+                                w={240}
+                            >
+                                <span>
+                                    <SortHeader label="Level" column="level" sort={sort} onSort={handleSort}/>
+                                </span>
+                            </Tooltip>
+                        </Table.Th>
                         <Table.Th style={{minWidth: 160}}>School</Table.Th>
                         <Table.Th style={{minWidth: 220}}>Descriptors</Table.Th>
                         <Table.Th style={{minWidth: 160}}>Sourcebook</Table.Th>
                     </Table.Tr>
                 </Table.Thead>
                 <Table.Tbody>
-                    {initialLoading ? (
-                        <Table.Tr>
-                            <Table.Td colSpan={4}>
-                                <Center py="xl"><Loader size="sm"/></Center>
+                    {results.map((spell) => (
+                        <Table.Tr
+                            key={spell.id}
+                            style={{cursor: "pointer"}}
+                            onClick={() => navigate(spellLink(spell.id), {state: FROM_LIST})}
+                        >
+                            <Table.Td>
+                                <Anchor
+                                    component={Link}
+                                    to={spellLink(spell.id)}
+                                    state={FROM_LIST}
+                                    onClick={(e) => e.stopPropagation()}
+                                    fw={600}
+                                    size="sm"
+                                    c="teal.4"
+                                >
+                                    {spell.name}
+                                </Anchor>
+                            </Table.Td>
+                            <Table.Td>
+                                <Text size="sm">{spell.level ?? "—"}</Text>
+                            </Table.Td>
+                            <Table.Td>
+                                {spell.school ? (
+                                    <>
+                                        <Badge
+                                            color={SCHOOL_COLORS[spell.school] ?? "gray"}
+                                            variant="light"
+                                            size="sm"
+                                        >
+                                            {spell.school}
+                                        </Badge>
+                                        {spell.subschool && (
+                                            <Text size="xs" c="dimmed" mt={2}>{spell.subschool}</Text>
+                                        )}
+                                    </>
+                                ) : (
+                                    <Text size="xs" c="dimmed">see text</Text>
+                                )}
+                            </Table.Td>
+                            <Table.Td>
+                                <Group gap={4} wrap="wrap">
+                                    {spell.descriptors.map((d) => (
+                                        <Badge key={d} variant="dot" color="gray" size="xs">{d}</Badge>
+                                    ))}
+                                </Group>
+                            </Table.Td>
+                            <Table.Td>
+                                <Text size="sm" c="dimmed">{spell.sourcebook}</Text>
                             </Table.Td>
                         </Table.Tr>
-                    ) : results.length === 0 ? (
-                        <Table.Tr>
-                            <Table.Td colSpan={4}>
-                                <Text c="dimmed" ta="center" py="xl">No spells match your filters.</Text>
-                            </Table.Td>
-                        </Table.Tr>
-                    ) : (
-                        results.map((spell) => (
-                            <Table.Tr
-                                key={spell.id}
-                                style={{cursor: "pointer"}}
-                                onClick={() => navigate(`/spells/${spell.id}`)}
-                            >
-                                <Table.Td>
-                                    <Text fw={600} size="sm" c="teal.4">{spell.name}</Text>
-                                </Table.Td>
-                                <Table.Td>
-                                    {spell.school ? (
-                                        <>
-                                            <Badge
-                                                color={schoolColors[spell.school] ?? "gray"}
-                                                variant="light"
-                                                size="sm"
-                                            >
-                                                {spell.school}
-                                            </Badge>
-                                            {spell.subschool && (
-                                                <Text size="xs" c="dimmed" mt={2}>{spell.subschool}</Text>
-                                            )}
-                                        </>
-                                    ) : (
-                                        <Text size="xs" c="dimmed">see text</Text>
-                                    )}
-                                </Table.Td>
-                                <Table.Td>
-                                    <Group gap={4} wrap="wrap">
-                                        {spell.descriptors.map((d) => (
-                                            <Badge key={d} variant="dot" color="gray" size="xs">{d}</Badge>
-                                        ))}
-                                    </Group>
-                                </Table.Td>
-                                <Table.Td>
-                                    <Text size="sm" c="dimmed">{spell.sourcebook}</Text>
-                                </Table.Td>
-                            </Table.Tr>
-                        ))
-                    )}
+                    ))}
                 </Table.Tbody>
             </Table>
         </Table.ScrollContainer>
 
-        {/* Scroll sentinel — observed by IntersectionObserver to trigger next page */}
-        <div ref={sentinelRef} style={{height: 1}}/>
-
-        {loadingMore && (
-            <Center py="sm">
-                <Loader size="xs" color="teal"/>
-            </Center>
+        {/* Outside the table so they stay centred on screen when the table scrolls sideways */}
+        {!hasLoaded ? (
+            <Center py="xl"><Loader size="sm"/></Center>
+        ) : results.length === 0 && (
+            <Text c="dimmed" ta="center" py="xl">No spells match your filters.</Text>
         )}
 
-        <Outlet/>
+        <ListFooter
+            sentinelRef={list.sentinelRef}
+            loadingMore={list.loadingMore}
+            loadMoreFailed={list.loadMoreFailed}
+            onRetry={list.retry}
+        />
+
+        {outlet}
     </Stack>;
 };

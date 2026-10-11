@@ -2,7 +2,7 @@
  * Pathfinder 1E database seed script.
  * Run with: bun db/seed.ts
  *
- * Reads data/ JSON files and populates the Supabase Postgres database
+ * Reads data/ JSON files and populates the Postgres database
  * using the Drizzle schema in worker/db/schema.ts.
  *
  * Uses the same connection string as the local Hyperdrive simulation so

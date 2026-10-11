@@ -5,19 +5,21 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Commands
 
 ```bash
-bun run dev          # Start Vite dev server + Worker (via @cloudflare/vite-plugin)
+bun run dev          # Start Vite dev server + Worker (via @cloudflare/vite-plugin), http://localhost:5173
 bun run build        # tsc -b && vite build
-bun run lint         # eslint . (zero warnings enforced)
+bun run lint         # eslint . --max-warnings 0
+bun check            # Type-check all four tsconfig projects (use this, not tsc --noEmit)
 bun run deploy       # build + wrangler deploy
+bun run ui <route>   # UI harness: screenshot + layout/console report (see below)
 
-bun run db:push      # Push schema changes directly to Supabase (no migration files)
+bun run db:push      # Push schema changes directly to the database (no migration files)
 bun run db:generate  # Generate Drizzle migration SQL files
 bun run db:studio    # Open Drizzle Studio GUI
-bun run db:seed      # TRUNCATE CASCADE all tables then re-seed from data/*.json
+bun run db:seed      # DESTRUCTIVE: TRUNCATE CASCADE all tables then re-seed from data/*.json
 bun run cf-typegen   # Regenerate worker-configuration.d.ts from wrangler.jsonc bindings
 ```
 
-`bun run dev` starts both the Vite frontend and the Cloudflare Worker in a single process via `@cloudflare/vite-plugin`. There is no separate worker dev command.
+`bun run dev` starts both the Vite frontend and the Cloudflare Worker in a single process via `@cloudflare/vite-plugin`. There is no separate worker dev command. The user usually has it running already — check `http://localhost:5173` before starting another.
 
 ## Architecture
 
@@ -27,63 +29,82 @@ A Cloudflare Worker serves both the Hono JSON API (`/api/*`) and the Vite-built 
 
 ```
 vite.config.ts         — Vite + cloudflare() + vanillaExtractPlugin() + react()
-worker/index.ts        — Hono app; mounts /api/spells and /api (lookups)
-worker/routes/         — lookups.ts (simple lists), spells.ts (search + detail)
+worker/index.ts        — Hono app; mounts /api (lookups), /api/spells, /api/feats; JSON onError; exports AppType
+worker/routes/         — lookups.ts (lists + /stats), spells.ts, feats.ts (search + detail), params.ts (shared parsing)
 worker/db/schema.ts    — Drizzle schema (single source of truth)
 worker/db/index.ts     — createDb(connectionString) factory
-src/                   — React 19 SPA
-src/api/index.ts       — All fetch helpers + shared TypeScript types
-src/pages/             — Route-level components + their co-located helpers
+src/api/index.ts       — Typed Hono client (hc<AppType>), all fetch helpers + derived types
+src/pages/             — Route-level components + their co-located hooks, state helpers and styles
+src/env-shim.d.ts      — Minimal `Env` so the SPA project can type-check the worker import
 db/seed.ts             — One-shot seed script (bun only, not Worker)
+scripts/ui.ts          — UI harness (Bun.WebView + headless Chrome)
+data/*.json            — Canonical source data for the seed
 drizzle.config.ts      — Reads .env for DB URL; used by drizzle-kit commands
 ```
 
 ### Database
 
-- **Supabase PostgreSQL** accessed via **Cloudflare Hyperdrive** (connection pooling).
+- **Self-hosted PostgreSQL** (DigitalOcean Droplet) accessed via **Cloudflare Hyperdrive** (connection pooling).
 - `postgres.js` requires `prepare: false` — Hyperdrive manages the pool and does not support prepared statements.
-- At runtime, `c.env.HYPERDRIVE.connectionString` provides the connection string. Locally, Wrangler reads `CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE` from `.env`.
+- At runtime, `c.env.HYPERDRIVE.connectionString` provides the connection string. Locally, Wrangler and drizzle-kit both read `CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE` from `.env`.
 - All primary keys are **ULIDs** (text), generated with `ulidx`. Never use integer sequences.
 - **Subdomains are shared across multiple domains** (e.g. "Shadow" belongs to both Darkness and Death). The M2M relationship is modeled via `domain_subdomains` junction table — `subdomains.name` is unique and there is no `domainId` FK on the subdomains table.
-- Schema lives in `worker/db/schema.ts` and is shared between the Worker and `db/seed.ts` via `tsconfig.db.json`.
+- **Bloodline, patron and mystery junction tables store the CLASS level** at which the spell is granted, not the spell level (see Worker / API for the conversion).
 
 ### Worker / API
 
-- Spell search (`GET /api/spells`) uses **EXISTS correlated subqueries** built by `buildWhere()` in `worker/routes/spells.ts`. Source types (class, domain, subdomain, bloodline, patron, mystery) are OR'd. Level constraints are baked into each source subquery. When only a level filter is present (no source filter), the level is OR'd across all six junction tables.
-- Filter parameters accept **comma-separated IDs** (e.g. `school=id1,id2`). `parseIds()` and `parseLevels()` split and sanitize them.
+- Spell search (`GET /api/spells`) uses **EXISTS correlated subqueries** built by `buildWhere()` in `worker/routes/spells.ts`, driven by the `SOURCES` table. Source types (class, domain, subdomain, bloodline, patron, mystery) are OR'd. Level constraints are baked into each source subquery. When only a level filter is present (no source filter), the level is OR'd across all six junction tables.
+- Each spell list row carries `level` = lowest matching spell level (`buildLevelExpr()`); `sort=level` orders by it.
+- `SOURCES[*].level` converts class level → spell level: sorcerer bloodlines `(cl-1)/2` (granted at 3, 5, …, 19), bloodrager bloodlines — name ends in `(BloodRager)` — `(cl-4)/3` (7, 10, 13, 16), patrons and mysteries `cl/2` (2, 4, …, 18). The detail endpoint returns both `level` and `classLevel`.
+- Filter parameters accept **comma-separated IDs** (e.g. `school=id1,id2`), split by `parseIds()` / `parseLevels()` in `params.ts`. `limit`/`offset` are coerced and clamped by `paginationSchema` (bad values → 400). Name search escapes LIKE wildcards (`escapeLike()`).
+- Lookup routes send `Cache-Control: public, max-age=3600`; the SPA also caches them in memory (`once()` in `src/api/index.ts`).
 - `GET /api/domains` returns `{ id, name, subdomains: [] }` — the subdomain nesting is built at query time from `domainSubdomains`.
 
 ### Frontend
 
-- **React Router v7** uses `createHashRouter` (not BrowserRouter). Hash routing is required because the Worker SPA fallback doesn't support pushState-based navigation for client-side routes.
-- **SpellModal** and **FeatModal** are nested routes under `/spells/:id` and `/feats/:id`, rendered as `<Outlet />` children of the list page.
-- `src/api/index.ts` owns all type definitions shared between the SPA and API response shapes. No types are imported from `worker/`.
+- **React Router v7** with `createHashRouter`: app routes live after `#` (e.g. `/#/spells/<id>`).
+- **SpellModal** and **FeatModal** are nested routes under `/spells/:id` and `/feats/:id`, rendered via `useOutlet()` in the list page. The list renders its own `<title>` only when no modal is open; the modal renders the record's.
+- **List filters, search and sort live in the URL query** (`useSearchParams`, updated with `replace`). URL param names mirror the API's — see `spellFilterState.ts` / `featFilterState.ts`. Links to a modal carry the current query.
+- Opening a modal from the list passes `FROM_LIST` router state; `useCloseModal()` then goes `navigate(-1)`, otherwise (deep link) it replaces the entry with the list. In-modal links between feats use `replace` and keep the router state.
+- Detail modals: `useDetail(id, fetcher)` fetches; `useDetailModalLayout()` puts the name in the header bar, wraps long words, and goes full-screen below 48em.
+- Shared list plumbing: `useInfiniteList` (paging + IntersectionObserver; a failed page stops auto-loading until `retry()`), `useUrlSearch`, `ListFooter`/`ListError`, `SectionLabel`/`LabeledSection`.
+- `src/api/index.ts` derives all response/request types from the Worker's Hono app — never hand-write API types.
 - **vanilla-extract** `.css.ts` files are co-located next to the components that use them.
-- `src/data/feats.ts` is still static placeholder data — the Feats page is not yet wired to the real API.
 
 ### Code style
 
-- **Component type**: Arrow functions with an explicit `FC` type — `export const Foo: FC = () => ...`. Never `function Foo()` for components, never `React.FC`.
-- **JSX returns**: No parentheses around the returned JSX. Return the element directly — `return <Div ...>`. Wrap in a fragment if multiple roots are needed.
-- **Props interfaces**: Declared inline above the component as a plain `interface`, not a type alias, and not passed as a generic to `FC` — `const Foo: FC = () => ...` with `interface FooProps { ... }` used only inside the file.
+- **Components**: arrow functions typed with `FC` — `export const Foo: FC<FooProps> = ({bar}) => ...`. Never `function Foo()` for components, never `React.FC`.
+- **Props**: a plain `interface FooProps { ... }` declared right above the component (not a type alias, not an inline object type).
+- **JSX returns**: no parentheses around the returned JSX — `return <Div ...>`. Wrap in a fragment if multiple roots are needed.
 
 ### React patterns enforced by ESLint
 
-- **`eslint-plugin-react-hooks` v7** (`set-state-in-effect` rule): calling `setState` synchronously in a `useEffect` body is an error. All state updates must be inside async callbacks, `startTransition`, or Promise `.then()` handlers.
-- **`react-refresh/only-export-components`**: `.tsx` files must only export React components. Types, constants, and utility functions that are shared between components go in `.ts` files (e.g. `spellFilterState.ts`).
-- The key-based remount pattern (`key={id}` on a child component) is used to avoid synchronous loading-state resets when a new spell is opened.
+- **`eslint-plugin-react-hooks` v7** (`set-state-in-effect` rule): calling `setState` synchronously in a `useEffect` body is an error. State updates go in async callbacks, `startTransition`, Promise `.then()` handlers, or effect events (`useEffectEvent`) called from effects. Prefer deriving state over resetting it — e.g. `useDetail` tags results with their ID so a stale result reads as "loading".
+- **`react-refresh/only-export-components`**: `.tsx` files must only export React components. Hooks, types, constants and helpers shared between components go in `.ts` files (e.g. `spellFilterState.ts`, `useInfiniteList.ts`).
 
 ### TypeScript projects
 
-Three tsconfig targets:
-- `tsconfig.app.json` — SPA (`src/`)
+Four tsconfig projects, all referenced from `tsconfig.json`:
+- `tsconfig.app.json` — SPA (`src/`, plus `worker/` so `hc<AppType>` can infer API types)
+- `tsconfig.node.json` — tooling config (`vite.config.ts`, `drizzle.config.ts`)
 - `tsconfig.worker.json` — Hono Worker (`worker/`)
-- `tsconfig.db.json` — DB seed scripts (`db/`, `worker/db/`), adds `bun-types`
+- `tsconfig.db.json` — Bun scripts (`db/`, `worker/db/`, `scripts/`), adds `bun-types`
 
-Run `bunx tsc --noEmit` to type-check all projects simultaneously.
+TypeScript is pinned to 6.x because typescript-eslint does not support TS 7 yet.
+
+### UI harness
+
+`bun run ui <route> [options]` loads `http://localhost:5173/#/<route>` in headless Chrome (Bun.WebView), waits for loaders to disappear and layout to settle, then saves a screenshot to `.ui/` (gitignored) and reports:
+- **offscreen** — elements past the viewport's right edge
+- **clipped** — containers whose content is wider than they are (expected for the list tables on mobile; anything else is usually a bug)
+- **console** — page errors/warnings
+
+Options: `--device=mobile|tablet|desktop` (390×844 / 820×1180 / 1440×900) or `--size=WxH`, `--click=<selector>`, `--type=<text>`, `--scroll=<selector>`, `--eval=<expression>`, `--full`, `--dpr=2`, `--out=<file>`. Pass the route **without** a leading slash (`spells/<id>`): Git Bash rewrites `/…` arguments into Windows paths. Mobile sizes use DevTools device emulation because headless Chrome won't go below 500px wide.
+
+Use it to check UI changes on both mobile and desktop before calling them done; read the screenshots.
 
 ## Critical constraints
 
-- **DO NOT run `data/refresh.ts`** — it is a Deno script written ~2 years ago. Running it would overwrite the source data.
-- **DO NOT commit `.env`** — it contains the Supabase database password.
+- **`data/*.json` is the canonical source data** — never overwrite or regenerate it.
+- **DO NOT commit `.env`** — it contains the database password.
 - **`bun run db:seed` is destructive** — it runs `TRUNCATE CASCADE` on all tables before inserting. Only run intentionally.

@@ -4,5 +4,5 @@
     "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.db.tsbuildinfo",
     "types": ["node", "bun-types"]
   },
-  "include": ["db", "worker/db"]
+  "include": ["db", "worker/db", "scripts"]
 }

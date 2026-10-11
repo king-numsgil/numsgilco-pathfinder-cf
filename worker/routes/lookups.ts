@@ -1,46 +1,41 @@
-import { asc, sql } from "drizzle-orm";
+import { asc, count, sql } from "drizzle-orm";
 import { Hono } from "hono";
 import { createDb } from "../db";
 import * as s from "../db/schema";
 
 type HonoEnv = { Bindings: Env };
 
+type NamedTable =
+    | typeof s.classes
+    | typeof s.schools
+    | typeof s.subschools
+    | typeof s.deities
+    | typeof s.bloodlines
+    | typeof s.patrons
+    | typeof s.mysteries;
+
+function listNamed(connectionString: string, table: NamedTable): Promise<{ id: string; name: string }[]> {
+    const db = createDb(connectionString);
+    return db.select({id: table.id, name: table.name}).from(table).orderBy(asc(table.name));
+}
+
+// Reference data only changes on re-seed; let browsers reuse it for an hour
+const CACHE_CONTROL = "public, max-age=3600";
+
 const app = new Hono<HonoEnv>()
-    .get("/classes", async (c) => {
-        const db = createDb(c.env.HYPERDRIVE.connectionString);
-        const rows = await db.select().from(s.classes).orderBy(asc(s.classes.name));
-        return c.json(rows);
+    .use(async (c, next) => {
+        await next();
+        if (c.res.ok) {
+            c.header("Cache-Control", CACHE_CONTROL);
+        }
     })
-    .get("/schools", async (c) => {
-        const db = createDb(c.env.HYPERDRIVE.connectionString);
-        const rows = await db.select().from(s.schools).orderBy(asc(s.schools.name));
-        return c.json(rows);
-    })
-    .get("/subschools", async (c) => {
-        const db = createDb(c.env.HYPERDRIVE.connectionString);
-        const rows = await db.select().from(s.subschools).orderBy(asc(s.subschools.name));
-        return c.json(rows);
-    })
-    .get("/deities", async (c) => {
-        const db = createDb(c.env.HYPERDRIVE.connectionString);
-        const rows = await db.select().from(s.deities).orderBy(asc(s.deities.name));
-        return c.json(rows);
-    })
-    .get("/bloodlines", async (c) => {
-        const db = createDb(c.env.HYPERDRIVE.connectionString);
-        const rows = await db.select().from(s.bloodlines).orderBy(asc(s.bloodlines.name));
-        return c.json(rows);
-    })
-    .get("/patrons", async (c) => {
-        const db = createDb(c.env.HYPERDRIVE.connectionString);
-        const rows = await db.select().from(s.patrons).orderBy(asc(s.patrons.name));
-        return c.json(rows);
-    })
-    .get("/mysteries", async (c) => {
-        const db = createDb(c.env.HYPERDRIVE.connectionString);
-        const rows = await db.select().from(s.mysteries).orderBy(asc(s.mysteries.name));
-        return c.json(rows);
-    })
+    .get("/classes", async (c) => c.json(await listNamed(c.env.HYPERDRIVE.connectionString, s.classes)))
+    .get("/schools", async (c) => c.json(await listNamed(c.env.HYPERDRIVE.connectionString, s.schools)))
+    .get("/subschools", async (c) => c.json(await listNamed(c.env.HYPERDRIVE.connectionString, s.subschools)))
+    .get("/deities", async (c) => c.json(await listNamed(c.env.HYPERDRIVE.connectionString, s.deities)))
+    .get("/bloodlines", async (c) => c.json(await listNamed(c.env.HYPERDRIVE.connectionString, s.bloodlines)))
+    .get("/patrons", async (c) => c.json(await listNamed(c.env.HYPERDRIVE.connectionString, s.patrons)))
+    .get("/mysteries", async (c) => c.json(await listNamed(c.env.HYPERDRIVE.connectionString, s.mysteries)))
     .get("/domains", async (c) => {
         const db = createDb(c.env.HYPERDRIVE.connectionString);
         const rows = await db.query.domains.findMany({
@@ -77,6 +72,14 @@ const app = new Hono<HonoEnv>()
             .from(s.feats)
             .orderBy(sql`1`);
         return c.json(rows.map((r) => r.type).filter(Boolean));
+    })
+    .get("/stats", async (c) => {
+        const db = createDb(c.env.HYPERDRIVE.connectionString);
+        const [[spells], [feats]] = await Promise.all([
+            db.select({total: count()}).from(s.spells),
+            db.select({total: count()}).from(s.feats),
+        ]);
+        return c.json({spells: spells.total, feats: feats.total});
     });
 
 export default app;

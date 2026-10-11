@@ -2,34 +2,11 @@ import { ActionIcon, Chip, Divider, Drawer, Group, MultiSelect, ScrollArea, Stac
 import { type FC, useMemo } from "react";
 import { FiX } from "react-icons/fi";
 import { type DomainWithSubdomains, type LookupItem } from "../api";
-import { type FilterState } from "./spellFilterState";
+import { ListError } from "./ListFooter";
+import { LabeledSection } from "./SectionLabel";
+import { activeFilterCount, type FilterState, SCHOOL_COLORS } from "./spellFilterState";
 
-const SCHOOL_COLORS: Record<string, string> = {
-    Abjuration: "blue",
-    Conjuration: "teal",
-    Divination: "violet",
-    Enchantment: "pink",
-    Evocation: "red",
-    Illusion: "grape",
-    Necromancy: "dark",
-    Transmutation: "green",
-    Universal: "gray",
-};
-
-function toOptions(items: LookupItem[]) {
-    return items.map((i) => ({value: i.id, label: i.name}));
-}
-
-function FilterSection({label, children}: { label: string; children: React.ReactNode }) {
-    return (
-        <Stack gap={6}>
-            <Text size="xs" tt="uppercase" fw={700} c="dimmed" style={{letterSpacing: "0.06em"}}>
-                {label}
-            </Text>
-            {children}
-        </Stack>
-    );
-}
+const toOptions = (items: LookupItem[]) => items.map((i) => ({value: i.id, label: i.name}));
 
 interface Props {
     opened: boolean;
@@ -37,9 +14,11 @@ interface Props {
     filters: FilterState;
     onChange: <K extends keyof FilterState>(key: K, value: FilterState[K]) => void;
     onClear: () => void;
+    lookupError: boolean;
+    onRetryLookups: () => void;
     schools: LookupItem[];
     subschools: LookupItem[];
-    descriptorOptions: string[];
+    descriptors: string[];
     classes: LookupItem[];
     domains: DomainWithSubdomains[];
     bloodlines: LookupItem[];
@@ -54,9 +33,11 @@ export const SpellFilters: FC<Props> =
          filters,
          onChange,
          onClear,
+         lookupError,
+         onRetryLookups,
          schools,
          subschools,
-         descriptorOptions,
+         descriptors,
          classes,
          domains,
          bloodlines,
@@ -83,7 +64,14 @@ export const SpellFilters: FC<Props> =
             title={
                 <Group justify="space-between" w="100%">
                     <Text fw={600}>Filters</Text>
-                    <ActionIcon variant="subtle" color="gray" onClick={onClear} title="Clear all filters">
+                    <ActionIcon
+                        variant="subtle"
+                        color="gray"
+                        onClick={onClear}
+                        title="Clear all filters"
+                        aria-label="Clear all filters"
+                        disabled={activeFilterCount(filters) === 0}
+                    >
                         <FiX size={16}/>
                     </ActionIcon>
                 </Group>
@@ -93,7 +81,9 @@ export const SpellFilters: FC<Props> =
             scrollAreaComponent={ScrollArea.Autosize}
         >
             <Stack gap="lg" pb="xl">
-                <FilterSection label="Level">
+                {lookupError && <ListError message="Couldn't load filter options." onRetry={onRetryLookups}/>}
+
+                <LabeledSection label="Level">
                     <Chip.Group multiple value={filters.levels} onChange={(v) => onChange("levels", v)}>
                         <Group gap={6}>
                             {[0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map((lvl) => (
@@ -103,11 +93,11 @@ export const SpellFilters: FC<Props> =
                             ))}
                         </Group>
                     </Chip.Group>
-                </FilterSection>
+                </LabeledSection>
 
                 <Divider/>
 
-                <FilterSection label="School">
+                <LabeledSection label="School">
                     <Chip.Group multiple value={filters.schoolIds} onChange={(v) => onChange("schoolIds", v)}>
                         <Group gap={6} wrap="wrap">
                             {schools.map((s) => (
@@ -123,9 +113,9 @@ export const SpellFilters: FC<Props> =
                             ))}
                         </Group>
                     </Chip.Group>
-                </FilterSection>
+                </LabeledSection>
 
-                <FilterSection label="Subschool">
+                <LabeledSection label="Subschool">
                     <MultiSelect
                         data={toOptions(subschools)}
                         value={filters.subschoolIds}
@@ -135,11 +125,11 @@ export const SpellFilters: FC<Props> =
                         clearable
                         maxDropdownHeight={200}
                     />
-                </FilterSection>
+                </LabeledSection>
 
-                <FilterSection label="Descriptor">
+                <LabeledSection label="Descriptor">
                     <MultiSelect
-                        data={descriptorOptions}
+                        data={descriptors}
                         value={filters.descriptors}
                         onChange={(v) => onChange("descriptors", v)}
                         placeholder="Any descriptor"
@@ -147,11 +137,11 @@ export const SpellFilters: FC<Props> =
                         clearable
                         maxDropdownHeight={200}
                     />
-                </FilterSection>
+                </LabeledSection>
 
                 <Divider/>
 
-                <FilterSection label="Class">
+                <LabeledSection label="Class">
                     <MultiSelect
                         data={toOptions(classes)}
                         value={filters.classIds}
@@ -161,11 +151,11 @@ export const SpellFilters: FC<Props> =
                         clearable
                         maxDropdownHeight={240}
                     />
-                </FilterSection>
+                </LabeledSection>
 
                 <Divider/>
 
-                <FilterSection label="Domain">
+                <LabeledSection label="Domain">
                     <MultiSelect
                         data={toOptions(domains)}
                         value={filters.domainIds}
@@ -175,9 +165,9 @@ export const SpellFilters: FC<Props> =
                         clearable
                         maxDropdownHeight={200}
                     />
-                </FilterSection>
+                </LabeledSection>
 
-                <FilterSection label="Subdomain">
+                <LabeledSection label="Subdomain">
                     <MultiSelect
                         data={toOptions(availableSubdomains)}
                         value={filters.subdomainIds}
@@ -187,11 +177,11 @@ export const SpellFilters: FC<Props> =
                         clearable
                         maxDropdownHeight={200}
                     />
-                </FilterSection>
+                </LabeledSection>
 
                 <Divider/>
 
-                <FilterSection label="Bloodline">
+                <LabeledSection label="Bloodline">
                     <MultiSelect
                         data={toOptions(bloodlines)}
                         value={filters.bloodlineIds}
@@ -201,9 +191,9 @@ export const SpellFilters: FC<Props> =
                         clearable
                         maxDropdownHeight={200}
                     />
-                </FilterSection>
+                </LabeledSection>
 
-                <FilterSection label="Patron">
+                <LabeledSection label="Patron">
                     <MultiSelect
                         data={toOptions(patrons)}
                         value={filters.patronIds}
@@ -213,9 +203,9 @@ export const SpellFilters: FC<Props> =
                         clearable
                         maxDropdownHeight={200}
                     />
-                </FilterSection>
+                </LabeledSection>
 
-                <FilterSection label="Mystery">
+                <LabeledSection label="Mystery">
                     <MultiSelect
                         data={toOptions(mysteries)}
                         value={filters.mysteryIds}
@@ -225,7 +215,7 @@ export const SpellFilters: FC<Props> =
                         clearable
                         maxDropdownHeight={200}
                     />
-                </FilterSection>
+                </LabeledSection>
             </Stack>
         </Drawer>;
     };
