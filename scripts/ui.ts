@@ -5,8 +5,8 @@
  *   bun run ui spells/01M4PBRKPNR6XMJM8TJWFH55NP --device=mobile
  *   bun run ui spells --device=tablet --click="button:has(svg)" --out=.ui/filters.png
  *
- * The route is the part after "#". Omit its leading slash: Git Bash rewrites
- * arguments starting with "/" into Windows paths.
+ * The route is the URL path (+ query). Omit its leading slash: Git Bash
+ * rewrites arguments starting with "/" into Windows paths.
  *
  * Steps run in order: --type, --click, --scroll (each repeatable, applied in the
  * order given per kind). Before the screenshot, the page is given time to settle:
@@ -83,8 +83,7 @@ if (width < 768) {
     await view.cdp("Emulation.setTouchEmulationEnabled", {enabled: true, maxTouchPoints: 5});
 }
 
-// Hash router: the app route lives after "#"
-await view.navigate(`${values.base}/#${route.startsWith("/") ? route : `/${route}`}`);
+await view.navigate(`${values.base}${route.startsWith("/") ? route : `/${route}`}`);
 
 // Wait until loaders are gone, CSS transitions/animations have finished (drawers,
 // modals) and layout has stopped moving for a few frames

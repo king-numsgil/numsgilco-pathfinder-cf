@@ -1,5 +1,5 @@
 import type { FC } from "react";
-import { createHashRouter, RouterProvider } from "react-router-dom";
+import { createBrowserRouter, RouterProvider } from "react-router-dom";
 import { FeatModal } from "./pages/FeatModal";
 import { Feats } from "./pages/Feats";
 import { Home } from "./pages/Home";
@@ -7,7 +7,12 @@ import { SpellModal } from "./pages/SpellModal";
 import { Spells } from "./pages/Spells";
 import { Shell } from "./Shell";
 
-const router = createHashRouter([
+// Old hash-router links (/#/spells/<id>?…) → /spells/<id>?…
+if (window.location.hash.startsWith("#/")) {
+    window.history.replaceState(null, "", window.location.hash.slice(1));
+}
+
+const router = createBrowserRouter([
     {
         element: <Shell/>,
         children: [

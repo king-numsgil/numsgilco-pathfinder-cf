@@ -25,7 +25,7 @@ bun run cf-typegen   # Regenerate worker-configuration.d.ts from wrangler.jsonc 
 
 ### Overview
 
-A Cloudflare Worker serves both the Hono JSON API (`/api/*`) and the Vite-built SPA (static assets). The Worker handles API routes; all other requests fall through to the SPA via `"not_found_handling": "single-page-application"` in `wrangler.jsonc`.
+A Cloudflare Worker serves both the Hono JSON API (`/api/*`) and the Vite-built SPA (static assets). In `wrangler.jsonc`, `"run_worker_first": ["/api/*"]` sends every API request to the Worker (even direct browser navigations); everything else is a static asset or falls back to `index.html` via `"not_found_handling": "single-page-application"`, so client routes like `/spells/<id>` deep-link fine.
 
 ```
 vite.config.ts         — Vite + cloudflare() + vanillaExtractPlugin() + react()
@@ -62,10 +62,10 @@ drizzle.config.ts      — Reads .env for DB URL; used by drizzle-kit commands
 
 ### Frontend
 
-- **React Router v7** with `createHashRouter`: app routes live after `#` (e.g. `/#/spells/<id>`).
+- **React Router v7** with `createBrowserRouter` (clean URLs, e.g. `/spells/<id>?level=1`). Legacy hash links (`/#/spells/<id>`) are rewritten at startup in `App.tsx`.
 - **SpellModal** and **FeatModal** are nested routes under `/spells/:id` and `/feats/:id`, rendered via `useOutlet()` in the list page. The list renders its own `<title>` only when no modal is open; the modal renders the record's.
 - **List filters, search and sort live in the URL query** (`useSearchParams`, updated with `replace`). URL param names mirror the API's — see `spellFilterState.ts` / `featFilterState.ts`. Links to a modal carry the current query.
-- Opening a modal from the list passes `FROM_LIST` router state; `useCloseModal()` then goes `navigate(-1)`, otherwise (deep link) it replaces the entry with the list. In-modal links between feats use `replace` and keep the router state.
+- Modal history: opening from the list passes `FROM_LIST` router state (`{fromList, depth: 1}`); in-modal links to another record push history with `useNestedModalState()` (depth + 1), so Back returns to the previous record. `useCloseModal()` goes `navigate(-depth)` straight back to the list; for deep links (no `fromList`) it replaces the entry with the list.
 - Detail modals: `useDetail(id, fetcher)` fetches; `useDetailModalLayout()` puts the name in the header bar, wraps long words, and goes full-screen below 48em.
 - Shared list plumbing: `useInfiniteList` (paging + IntersectionObserver; a failed page stops auto-loading until `retry()`), `useUrlSearch`, `ListFooter`/`ListError`, `SectionLabel`/`LabeledSection`.
 - `src/api/index.ts` derives all response/request types from the Worker's Hono app — never hand-write API types.
@@ -94,7 +94,7 @@ TypeScript is pinned to 6.x because typescript-eslint does not support TS 7 yet.
 
 ### UI harness
 
-`bun run ui <route> [options]` loads `http://localhost:5173/#/<route>` in headless Chrome (Bun.WebView), waits for loaders to disappear and layout to settle, then saves a screenshot to `.ui/` (gitignored) and reports:
+`bun run ui <route> [options]` loads `http://localhost:5173/<route>` (or `--base=<url>`, e.g. a `vite preview` on :4173) in headless Chrome (Bun.WebView), waits for loaders to disappear and layout to settle, then saves a screenshot to `.ui/` (gitignored) and reports:
 - **offscreen** — elements past the viewport's right edge
 - **clipped** — containers whose content is wider than they are (expected for the list tables on mobile; anything else is usually a bug)
 - **console** — page errors/warnings

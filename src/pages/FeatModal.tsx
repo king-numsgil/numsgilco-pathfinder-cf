@@ -16,7 +16,7 @@ import { Link, useLocation, useParams } from "react-router-dom";
 import { type FeatDetail, fetchFeat } from "../api";
 import { FEAT_TYPE_COLORS } from "./featFilterState";
 import { useDetailModalLayout } from "./detailModal";
-import { useCloseModal } from "./listNavigation";
+import { useCloseModal, useNestedModalState } from "./listNavigation";
 import { LabeledSection, SectionLabel } from "./SectionLabel";
 import { useDetail } from "./useDetail";
 
@@ -40,10 +40,11 @@ interface FeatLinkGridProps {
     feats: { id: string; name: string; types: string[]; note?: string | null }[];
 }
 
-// Links to related feats. They replace the current history entry (keeping its
-// router state) so closing the modal still returns straight to the list.
+// Links to related feats. They push history (Back returns to the previous
+// feat) and record the modal depth so closing still returns to the list.
 const FeatLinkGrid: FC<FeatLinkGridProps> = ({label, feats}) => {
     const location = useLocation();
+    const linkState = useNestedModalState();
 
     return <Stack gap={8}>
         <Group gap="xs" align="baseline">
@@ -56,17 +57,21 @@ const FeatLinkGrid: FC<FeatLinkGridProps> = ({label, feats}) => {
                     key={f.id}
                     component={Link}
                     to={{pathname: `/feats/${f.id}`, search: location.search}}
-                    state={location.state}
-                    replace
+                    state={linkState}
                     withBorder
                     p="xs"
                 >
                     <Text size="xs" fw={500} c="teal.4" lineClamp={2} lh={1.35}>
                         {f.name}{f.note ? ` (${f.note})` : ""}
                     </Text>
-                    {/* Mythic feats often share their base feat's name */}
-                    {f.types.includes("Mythic") && (
-                        <Badge color={FEAT_TYPE_COLORS.Mythic} variant="light" size="xs" mt={4}>Mythic</Badge>
+                    {f.types.length > 0 && (
+                        <Group gap={4} mt={4}>
+                            {f.types.map((t) => (
+                                <Badge key={t} color={FEAT_TYPE_COLORS[t] ?? "gray"} variant="light" size="xs">
+                                    {t}
+                                </Badge>
+                            ))}
+                        </Group>
                     )}
                 </Paper>
             ))}
