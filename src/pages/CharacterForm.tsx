@@ -172,11 +172,11 @@ export const CharacterForm: FC<CharacterFormProps> = ({opened, onClose, characte
                 <Stack gap={6}>
                     <SectionLabel>Spells per day</SectionLabel>
                     <Text size="xs" c="dimmed">
-                        Including bonus spells from your ability score.
-                        {input.prepared ? " Cantrips: how many you prepare." : " Cantrips are cast at will."}
+                        Including bonus spells from your ability score. Cantrips are cast at will.
                     </Text>
                     <SimpleGrid cols={2} spacing="md" verticalSpacing="sm">
-                        {SPELL_LEVELS.map((level) => (
+                        {/* Cantrips are at will: nothing to count */}
+                        {SPELL_LEVELS.filter((level) => level > 0).map((level) => (
                             <SlotStepper
                                 key={level}
                                 level={level}

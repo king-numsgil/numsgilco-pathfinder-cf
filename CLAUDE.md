@@ -80,6 +80,7 @@ drizzle.config.ts      — Reads .env for DB URL; used by drizzle-kit commands
 
 - **React Router v7** with `createBrowserRouter` (clean URLs, e.g. `/spells/<id>?level=1`). Legacy hash links (`/#/spells/<id>`) are rewritten at startup in `App.tsx`.
 - **SpellModal** and **FeatModal** are nested routes under `/spells/:id` and `/feats/:id`, rendered via `useOutlet()` in the list page. The list renders its own `<title>` only when no modal is open; the modal renders the record's.
+- SpellModal is also nested under a spellbook (`/characters/:id/spells/:spellId`); it reads `spellId` when present and closes back to the spellbook (keeping `?tab`). The spellbook reloads the character when the modal closes, since "Add to spellbook" may have changed it.
 - **List filters, search and sort live in the URL query** (`useSearchParams`, updated with `replace`). URL param names mirror the API's — see `spellFilterState.ts` / `featFilterState.ts`. Links to a modal carry the current query.
 - Modal history: opening from the list passes `FROM_LIST` router state (`{fromList, depth: 1}`); in-modal links to another record push history with `useNestedModalState()` (depth + 1), so Back returns to the previous record. `useCloseModal()` goes `navigate(-depth)` straight back to the list; for deep links (no `fromList`) it replaces the entry with the list.
 - Detail modals: `useDetail(id, fetcher)` fetches; `useDetailModalLayout()` puts the name in the header bar, wraps long words, and goes full-screen below 48em.

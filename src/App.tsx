@@ -30,7 +30,11 @@ const router = createBrowserRouter([
                 children: [{path: ":id", element: <FeatModal/>}],
             },
             {path: "/characters", element: <Characters/>},
-            {path: "/characters/:id", element: <Spellbook/>},
+            {
+                path: "/characters/:id",
+                element: <Spellbook/>,
+                children: [{path: "spells/:spellId", element: <SpellModal/>}],
+            },
         ],
     },
 ]);

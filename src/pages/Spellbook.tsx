@@ -5,7 +5,7 @@ import {
 import { type FC, type ReactNode, useEffect, useRef, useState } from "react";
 import { GiNightSleep } from "react-icons/gi";
 import { MdAdd, MdClose, MdDeleteOutline, MdEdit, MdRemove } from "react-icons/md";
-import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { Link, useLocation, useNavigate, useOutlet, useParams, useSearchParams } from "react-router-dom";
 import {
     addKnownSpell, type CharacterDetail, deleteCharacter, fetchCharacter, fetchGranted, type GrantedSpell,
     prepareSpell, removeKnownSpell,
@@ -30,11 +30,13 @@ interface SpellLinkProps {
     struck?: boolean;
 }
 
-// Opens the spell's modal over the spell list; closing it steps back here
-const SpellLink: FC<SpellLinkProps> = ({id, name, struck}) =>
-    <Anchor
+// Opens the spell's modal over this spellbook (nested route); closing it steps back
+const SpellLink: FC<SpellLinkProps> = ({id, name, struck}) => {
+    // Keep ?tab so closing the modal returns to the same tab
+    const {search} = useLocation();
+    return <Anchor
         component={Link}
-        to={`/spells/${id}`}
+        to={{pathname: `spells/${id}`, search}}
         state={FROM_LIST}
         c="inherit"
         size="sm"
@@ -44,6 +46,7 @@ const SpellLink: FC<SpellLinkProps> = ({id, name, struck}) =>
     >
         {name}
     </Anchor>;
+};
 
 interface LevelCardProps {
     level: number;
@@ -99,8 +102,8 @@ const PreparedToday: FC<TabProps> = ({character, mutate}) => {
             return <LevelCard
                 key={level}
                 level={level}
-                badge={<Group gap={6}>
-                    {level > 0 && prepared.length > 0 && (
+                badge={level === 0 ? <Badge variant="outline" color="gray">At will</Badge> : <Group gap={6}>
+                    {prepared.length > 0 && (
                         <Badge variant="light" color={left ? "teal" : "gray"}>{left} left</Badge>
                     )}
                     <Badge variant="outline" color={prepared.length > slots ? "red" : "gray"}>
@@ -322,9 +325,10 @@ const Granted: FC<TabProps> = ({character, mutate}) => {
 
 interface SpellbookViewProps {
     id: string;
+    modalOpen: boolean;
 }
 
-const SpellbookView: FC<SpellbookViewProps> = ({id}) => {
+const SpellbookView: FC<SpellbookViewProps> = ({id, modalOpen}) => {
     const navigate = useNavigate();
     const [searchParams, setSearchParams] = useSearchParams();
     const {data: loaded, error: loadError} = useDetail(id, fetchCharacter);
@@ -334,6 +338,23 @@ const SpellbookView: FC<SpellbookViewProps> = ({id}) => {
     const [editing, setEditing] = useState(false);
     // Only the newest mutation's response is applied, so quick taps can't regress
     const seq = useRef(0);
+
+    // The spell modal's "Add to spellbook" may have changed this character:
+    // reload once it closes
+    const wasModalOpen = useRef(modalOpen);
+    useEffect(() => {
+        if (wasModalOpen.current && !modalOpen) {
+            const mine = ++seq.current;
+            fetchCharacter(id)
+                .then((next) => {
+                    if (mine === seq.current) {
+                        setUpdated(next);
+                    }
+                })
+                .catch(() => {/* keep what's shown */});
+        }
+        wasModalOpen.current = modalOpen;
+    }, [id, modalOpen]);
 
     const character = updated?.id === id ? updated : loaded;
 
@@ -369,7 +390,8 @@ const SpellbookView: FC<SpellbookViewProps> = ({id}) => {
     const tab = requested === "book" || (requested === "granted" && hasSources) ? requested : "today";
 
     return <Stack gap="md">
-        <title>{`${character.name} — Pathfinder 1E`}</title>
+        {/* An open spell modal renders its own title */}
+        {!modalOpen && <title>{`${character.name} — Pathfinder 1E`}</title>}
         <Group justify="space-between" align="flex-start">
             <div>
                 <Title order={2}>{character.name}</Title>
@@ -448,6 +470,8 @@ const SpellbookView: FC<SpellbookViewProps> = ({id}) => {
 export const Spellbook: FC = () => {
     const {id} = useParams<{ id: string }>();
     const {data: session, isPending} = authClient.useSession();
+    // Spell modal (nested route spells/:spellId)
+    const outlet = useOutlet();
 
     if (isPending) {
         return <Center py="xl"><Loader/></Center>;
@@ -457,6 +481,7 @@ export const Spellbook: FC = () => {
     }
     return <Stack>
         <Anchor component={Link} to="/characters" size="sm" c="dimmed">← Spellbooks</Anchor>
-        {id && <SpellbookView key={id} id={id}/>}
+        {id && <SpellbookView key={id} id={id} modalOpen={outlet !== null}/>}
+        {outlet}
     </Stack>;
 };

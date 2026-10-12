@@ -162,8 +162,10 @@ const SpellContent: FC<SpellContentProps> = ({spell}) => {
 };
 
 export const SpellModal: FC = () => {
-    const {id} = useParams<{ id: string }>();
-    const closeModal = useCloseModal("/spells");
+    // Over the spell list (/spells/:id) or a spellbook (/characters/:id/spells/:spellId)
+    const params = useParams<{ id: string; spellId?: string }>();
+    const id = params.spellId ?? params.id;
+    const closeModal = useCloseModal(params.spellId ? `/characters/${params.id}` : "/spells");
     const [opened, setOpened] = useState(true);
     const {data: spell, error} = useDetail(id, fetchSpell);
     const layout = useDetailModalLayout();
