@@ -1,5 +1,5 @@
 import { relations } from "drizzle-orm";
-import { boolean, integer, jsonb, pgTable, primaryKey, smallint, text } from "drizzle-orm/pg-core";
+import { boolean, jsonb, pgTable, primaryKey, real, smallint, text } from "drizzle-orm/pg-core";
 
 // ─── Lookup tables ────────────────────────────────────────────────────────────
 
@@ -21,7 +21,25 @@ export const subschools = pgTable("subschools", {
 export const deities = pgTable("deities", {
     id: text("id").primaryKey(),
     name: text("name").notNull().unique(),
+    pantheon: text("pantheon"),
+    alignment: text("alignment"),
+    areasOfConcern: text("areas_of_concern").array().notNull().default([]),
+    favoredWeapon: text("favored_weapon"),
+    pfsLegal: boolean("pfs_legal").notNull().default(false),
 });
+
+// A book reference, as scraped from Archive of Nethys
+export interface SourceRef {
+    book: string;
+    page: number | null;
+    url: string;
+}
+
+// Extra labeled sections (tables, notes, haunt statistics…), Markdown values
+export interface ExtraSection {
+    label: string;
+    value: string;
+}
 
 // ─── Domains & Subdomains ─────────────────────────────────────────────────────
 
@@ -76,9 +94,12 @@ export const subdomainDeities = pgTable(
 
 // ─── Bloodlines & Patrons ─────────────────────────────────────────────────────
 
+// Sorcerer and bloodrager bloodlines share names, so bloodrager ones are stored
+// as "Aberrant (Bloodrager)" and flagged — they grant spells at different levels
 export const bloodlines = pgTable("bloodlines", {
     id: text("id").primaryKey(),
     name: text("name").notNull().unique(),
+    bloodrager: boolean("bloodrager").notNull().default(false),
 });
 
 export const patrons = pgTable("patrons", {
@@ -108,17 +129,17 @@ export const mysteryDeities = pgTable(
 
 // ─── Spells ───────────────────────────────────────────────────────────────────
 
+// Text columns (description, mythic text, extra sections) hold Markdown
 export const spells = pgTable("spells", {
     id: text("id").primaryKey(),
     name: text("name").notNull(),
     link: text("link"),
     description: text("description").notNull(),
+    // Mythic version of the spell, including any "Augmented" paragraphs
     mythicText: text("mythic_text"),
-    augmented: text("augmented"),
-    rating: smallint("rating"),
+    pfsLegal: boolean("pfs_legal").notNull().default(false),
 
     schoolId: text("school_id").references(() => schools.id),
-    subschoolId: text("subschool_id").references(() => subschools.id),
     deityId: text("deity_id").references(() => deities.id),
 
     castingTime: text("casting_time").notNull().default(""),
@@ -129,7 +150,9 @@ export const spells = pgTable("spells", {
     duration: text("duration").notNull().default(""),
     savingThrow: text("saving_throw"),
     spellResistance: text("spell_resistance"),
+    // First source's book, for lists; every source is in `sources`
     sourcebook: text("sourcebook").notNull(),
+    sources: jsonb("sources").$type<SourceRef[]>().notNull().default([]),
 
     dismissible: boolean("dismissible").notNull().default(false),
     shapeable: boolean("shapeable").notNull().default(false),
@@ -138,18 +161,31 @@ export const spells = pgTable("spells", {
     material: boolean("material").notNull().default(false),
     focus: boolean("focus").notNull().default(false),
     divineFocus: boolean("divine_focus").notNull().default(false),
-    componentCost: integer("component_cost"),
+    // In gp; can be fractional (2 sp = 0.2)
+    componentCost: real("component_cost"),
+    // Components line as printed, e.g. "V, S, M (a flask of holy water worth 25 gp), DF"
+    componentsText: text("components_text").notNull().default(""),
 
-    permanency: boolean("permanency").notNull().default(false),
-    permanencyCl: smallint("permanency_cl"),
-    permanencyCost: integer("permanency_cost"),
-
-    slaLevel: smallint("sla_level"),
+    // Race (or other) restriction, e.g. "sylph"
     race: text("race"),
 
-    // 26 descriptors stored as a text array for efficient filtering
     descriptors: text("descriptors").array().notNull().default([]),
+    extra: jsonb("extra").$type<ExtraSection[]>().notNull().default([]),
 });
+
+// Spell ↔ Subschool (a few spells have two, e.g. Gate: creation and calling)
+export const spellSubschools = pgTable(
+    "spell_subschools",
+    {
+        spellId: text("spell_id")
+            .notNull()
+            .references(() => spells.id),
+        subschoolId: text("subschool_id")
+            .notNull()
+            .references(() => subschools.id),
+    },
+    (t) => [primaryKey({columns: [t.spellId, t.subschoolId]})],
+);
 
 // Spell ↔ Class (with spell level per class)
 export const spellClasses = pgTable(
@@ -166,6 +202,9 @@ export const spellClasses = pgTable(
     (t) => [primaryKey({columns: [t.spellId, t.classId]})],
 );
 
+// The `note` on domain, subdomain, bloodline, patron and mystery spells is the
+// list entry's qualifier, e.g. "air only" for "elemental body IV (air only)"
+
 // Spell ↔ Domain (with spell level)
 export const domainSpells = pgTable(
     "domain_spells",
@@ -177,11 +216,13 @@ export const domainSpells = pgTable(
             .notNull()
             .references(() => domains.id),
         level: smallint("level").notNull(),
+        note: text("note"),
     },
     (t) => [primaryKey({columns: [t.spellId, t.domainId]})],
 );
 
-// Spell ↔ Subdomain (with spell level)
+// Spell ↔ Subdomain (with spell level). Only the subdomain's replacement
+// spells — the rest of its list is its parent domain's.
 export const subdomainSpells = pgTable(
     "subdomain_spells",
     {
@@ -192,6 +233,7 @@ export const subdomainSpells = pgTable(
             .notNull()
             .references(() => subdomains.id),
         level: smallint("level").notNull(),
+        note: text("note"),
     },
     (t) => [primaryKey({columns: [t.spellId, t.subdomainId]})],
 );
@@ -207,6 +249,7 @@ export const bloodlineSpells = pgTable(
             .notNull()
             .references(() => bloodlines.id),
         classLevel: smallint("class_level").notNull(),
+        note: text("note"),
     },
     (t) => [primaryKey({columns: [t.spellId, t.bloodlineId]})],
 );
@@ -222,6 +265,7 @@ export const patronSpells = pgTable(
             .notNull()
             .references(() => patrons.id),
         classLevel: smallint("class_level").notNull(),
+        note: text("note"),
     },
     (t) => [primaryKey({columns: [t.spellId, t.patronId]})],
 );
@@ -244,23 +288,60 @@ export const mysterySpells = pgTable(
 
 // ─── Feats ────────────────────────────────────────────────────────────────────
 
+// One prerequisite: met by any one of its options ("Endurance or armor training")
+export interface PrereqGroup {
+    text: string;
+    anyOf: PrereqOption[];
+}
+
+export interface PrereqOption {
+    // feat, ability, skillRanks, classFeature, baseAttackBonus, race, classLevel,
+    // spellcasting, deity, proficiency, characterLevel, casterLevel, alignment,
+    // size, baseSave, mythicTier or special
+    type: string;
+    text: string;
+    name: string | null;
+    value: number | null;
+    detail: string | null;
+    // Codex key of the referenced record, e.g. "feat:iron-will", "spell:bestow-curse"
+    key: string | null;
+}
+
+// The mythic version of a feat (Mythic Adventures), shown on the base feat
+export interface FeatMythic {
+    name: string;
+    flavor: string;
+    prerequisites: string | null;
+    benefit: string;
+    special: string | null;
+    sources: SourceRef[];
+}
+
+// Text columns (benefit, normal, special, …) hold Markdown
 export const feats = pgTable("feats", {
     id: text("id").primaryKey(),
     name: text("name").notNull(),
-    // Stored as a normalized text array; feats can have multiple types
+    link: text("link"),
+    pfsLegal: boolean("pfs_legal").notNull().default(false),
+    // Feats can have multiple types; untyped feats are "General"
     types: text("types").array().notNull().default([]),
+    // Flavor text
     description: text("description").notNull(),
     prerequisites: text("prerequisites"),
-    // Structured prerequisite data — normalized at seed time (see db/seed.ts)
-    prerequisiteData: jsonb("prerequisite_data"),
+    prerequisiteData: jsonb("prerequisite_data").$type<PrereqGroup[]>(),
     benefit: text("benefit").notNull(),
     normal: text("normal"),
     special: text("special"),
-    raceName: text("race_name"),
-    note: text("note"),
     goal: text("goal"),
     completionBenefit: text("completion_benefit"),
+    // Stamina combat trick (Pathfinder Unchained)
+    combatTrick: text("combat_trick"),
+    mythic: jsonb("mythic").$type<FeatMythic>(),
+    extra: jsonb("extra").$type<ExtraSection[]>().notNull().default([]),
+    // First source's book, for lists; every source is in `sources`
     source: text("source").notNull(),
+    sources: jsonb("sources").$type<SourceRef[]>().notNull().default([]),
+    // Derived from the Special text ("You can gain this feat multiple times")
     multiples: boolean("multiples").notNull().default(false),
     // Denormalized from prerequisite_data for efficient numeric filtering
     minBab: smallint("min_bab"),
@@ -273,7 +354,7 @@ export const featPrerequisites = pgTable(
     {
         featId: text("feat_id").notNull().references(() => feats.id),
         requiredFeatId: text("required_feat_id").notNull().references(() => feats.id),
-        // Parameterization note, e.g. "conjuration" for "Spell Focus: conjuration"
+        // Parameterization note, e.g. "Acrobatics" for "Skill Focus (Acrobatics)"
         note: text("note"),
     },
     (t) => [primaryKey({columns: [t.featId, t.requiredFeatId]})],
@@ -283,8 +364,8 @@ export const featPrerequisites = pgTable(
 
 export const spellsRelations = relations(spells, ({one, many}) => ({
     school: one(schools, {fields: [spells.schoolId], references: [schools.id]}),
-    subschool: one(subschools, {fields: [spells.subschoolId], references: [subschools.id]}),
     deity: one(deities, {fields: [spells.deityId], references: [deities.id]}),
+    spellSubschools: many(spellSubschools),
     spellClasses: many(spellClasses),
     domainSpells: many(domainSpells),
     subdomainSpells: many(subdomainSpells),
@@ -307,7 +388,12 @@ export const schoolsRelations = relations(schools, ({many}) => ({
 }));
 
 export const subschoolsRelations = relations(subschools, ({many}) => ({
-    spells: many(spells),
+    spellSubschools: many(spellSubschools),
+}));
+
+export const spellSubschoolsRelations = relations(spellSubschools, ({one}) => ({
+    spell: one(spells, {fields: [spellSubschools.spellId], references: [spells.id]}),
+    subschool: one(subschools, {fields: [spellSubschools.subschoolId], references: [subschools.id]}),
 }));
 
 export const deitiesRelations = relations(deities, ({many}) => ({

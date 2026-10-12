@@ -15,19 +15,17 @@ type HonoEnv = { Bindings: Env };
 // (spell level 1–9), bloodrager bloodlines at 7, 10, 13, 16 (spell level 1–4),
 // and witch patrons / oracle mysteries at 2, 4, …, 18 (spell level 1–9).
 
-const BLOODRAGER_SUFFIX = "(BloodRager)";
-
 const bloodlineSpellLevel = sql`CASE
     WHEN ${s.bloodlineSpells.bloodlineId} IN (
         SELECT ${s.bloodlines.id} FROM ${s.bloodlines}
-        WHERE ${s.bloodlines.name} LIKE ${"%" + BLOODRAGER_SUFFIX}
+        WHERE ${s.bloodlines.bloodrager}
     )
     THEN (${s.bloodlineSpells.classLevel} - 4) / 3
     ELSE (${s.bloodlineSpells.classLevel} - 1) / 2
 END`;
 
-function bloodlineLevel(name: string, classLevel: number): number {
-    return name.endsWith(BLOODRAGER_SUFFIX) ? (classLevel - 4) / 3 : (classLevel - 1) / 2;
+function bloodlineLevel(bloodrager: boolean, classLevel: number): number {
+    return bloodrager ? (classLevel - 4) / 3 : (classLevel - 1) / 2;
 }
 
 function evenClassLevel(classLevel: number): number {
@@ -131,7 +129,10 @@ function buildWhere(db: ReturnType<typeof createDb>, params: SearchParams): SQL 
         filters.push(inArray(s.spells.schoolId, schoolIds));
     }
     if (subschoolIds.length) {
-        filters.push(inArray(s.spells.subschoolId, subschoolIds));
+        filters.push(exists(db.select({_: sql`1`}).from(s.spellSubschools).where(and(
+            eq(s.spellSubschools.spellId, s.spells.id),
+            inArray(s.spellSubschools.subschoolId, subschoolIds),
+        ))));
     }
     if (descriptors.length) {
         // Postgres && operator: spell's descriptor array overlaps with the selected set
@@ -159,6 +160,14 @@ function buildLevelExpr(params: SearchParams): SQL<number | null> {
     );
     return sql<number | null>`LEAST(${sql.join(mins, sql`, `)})`;
 }
+
+// "creation, calling" — a few spells have two subschools
+const subschoolNames = sql<string | null>`(
+    SELECT string_agg(${s.subschools.name}, ', ' ORDER BY ${s.subschools.name})
+    FROM ${s.spellSubschools}
+    JOIN ${s.subschools} ON ${s.subschools.id} = ${s.spellSubschools.subschoolId}
+    WHERE ${s.spellSubschools.spellId} = ${s.spells.id}
+)`;
 
 // ─── Query schema ─────────────────────────────────────────────────────────────
 
@@ -222,14 +231,12 @@ const app = new Hono<HonoEnv>()
                     name: s.spells.name,
                     level: levelExpr,
                     school: s.schools.name,
-                    subschool: s.subschools.name,
+                    subschool: subschoolNames,
                     descriptors: s.spells.descriptors,
                     sourcebook: s.spells.sourcebook,
-                    rating: s.spells.rating,
                 })
                 .from(s.spells)
                 .leftJoin(s.schools, eq(s.spells.schoolId, s.schools.id))
-                .leftJoin(s.subschools, eq(s.spells.subschoolId, s.subschools.id))
                 .where(where)
                 .orderBy(...orderBy)
                 .limit(limit)
@@ -246,8 +253,8 @@ const app = new Hono<HonoEnv>()
             where: eq(s.spells.id, id),
             with: {
                 school: true,
-                subschool: true,
                 deity: true,
+                spellSubschools: {with: {subschool: true}},
                 spellClasses: {
                     with: {class: true},
                     orderBy: (sc, {asc: a}) => [a(sc.level)],
@@ -285,12 +292,13 @@ const app = new Hono<HonoEnv>()
             link: spell.link,
             description: spell.description,
             mythicText: spell.mythicText,
-            augmented: spell.augmented,
-            rating: spell.rating,
+            pfsLegal: spell.pfsLegal,
 
             school: spell.school ?? null,
-            subschool: spell.subschool ?? null,
-            deity: spell.deity ?? null,
+            subschools: spell.spellSubschools
+                .map((ss) => ss.subschool)
+                .sort((a, b) => a.name.localeCompare(b.name)),
+            deity: spell.deity ? {id: spell.deity.id, name: spell.deity.name} : null,
             descriptors: spell.descriptors,
 
             castingTime: spell.castingTime,
@@ -302,6 +310,7 @@ const app = new Hono<HonoEnv>()
             savingThrow: spell.savingThrow,
             spellResistance: spell.spellResistance,
             sourcebook: spell.sourcebook,
+            sources: spell.sources,
 
             components: {
                 verbal: spell.verbal,
@@ -310,28 +319,29 @@ const app = new Hono<HonoEnv>()
                 focus: spell.focus,
                 divineFocus: spell.divineFocus,
                 cost: spell.componentCost,
+                text: spell.componentsText,
             },
             dismissible: spell.dismissible,
             shapeable: spell.shapeable,
 
-            permanency: spell.permanency
-                ? {cl: spell.permanencyCl, cost: spell.permanencyCost}
-                : null,
-            slaLevel: spell.slaLevel,
             race: spell.race,
+            extra: spell.extra,
 
             classes: spell.spellClasses.map((sc) => ({...sc.class, level: sc.level})),
-            domains: spell.domainSpells.map((ds) => ({...ds.domain, level: ds.level})),
-            subdomains: spell.subdomainSpells.map((ss) => ({...ss.subdomain, level: ss.level})),
+            domains: spell.domainSpells.map((ds) => ({...ds.domain, level: ds.level, note: ds.note})),
+            subdomains: spell.subdomainSpells.map((ss) => ({...ss.subdomain, level: ss.level, note: ss.note})),
             bloodlines: spell.bloodlineSpells.map((bs) => ({
-                ...bs.bloodline,
-                level: bloodlineLevel(bs.bloodline.name, bs.classLevel),
+                id: bs.bloodline.id,
+                name: bs.bloodline.name,
+                level: bloodlineLevel(bs.bloodline.bloodrager, bs.classLevel),
                 classLevel: bs.classLevel,
+                note: bs.note,
             })),
             patrons: spell.patronSpells.map((ps) => ({
                 ...ps.patron,
                 level: evenClassLevel(ps.classLevel),
                 classLevel: ps.classLevel,
+                note: ps.note,
             })),
             mysteries: spell.mysterySpells.map((ms) => ({
                 ...ms.mystery,

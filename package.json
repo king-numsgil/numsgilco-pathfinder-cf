@@ -42,8 +42,11 @@
 		"react": "^19.3.0",
 		"react-dom": "^19.3.0",
 		"react-icons": "^5.7.0",
+		"react-markdown": "^10.1.0",
 		"react-router-dom": "^7.18.4",
 		"recharts": "^3.10.1",
+		"remark-breaks": "^4.0.0",
+		"remark-gfm": "^4.0.1",
 		"ulidx": "^2.4.1",
 		"zod": "^4.6.6"
 	},

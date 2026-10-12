@@ -1,41 +1,27 @@
-import { Badge, Center, Divider, Group, Loader, Modal, ScrollArea, SimpleGrid, Stack, Text } from "@mantine/core";
+import { Badge, Center, Divider, Group, Loader, Modal, SimpleGrid, Stack, Text } from "@mantine/core";
 import { type FC, Fragment, useState } from "react";
 import { useParams } from "react-router-dom";
 import { fetchSpell, type SpellDetail } from "../api";
 import { useDetailModalLayout } from "./detailModal";
 import { useCloseModal } from "./listNavigation";
+import { Prose } from "./Prose";
 import { LabeledSection } from "./SectionLabel";
 import * as classes from "./SpellModal.css";
 import { SCHOOL_COLORS } from "./spellFilterState";
 import { useDetail } from "./useDetail";
 
-// Source text uses newlines for paragraphs and bullet lists
-const PROSE_STYLE = {lineHeight: 1.7, whiteSpace: "pre-line"} as const;
+// "Air 7 — air only": the list entry's qualifier, if any
+const withNote = (text: string, note: string | null) => note ? `${text} — ${note}` : text;
 
-function formatComponents(c: SpellDetail["components"]): string {
-    const parts: string[] = [];
-    if (c.verbal) {
-        parts.push("V");
-    }
-    if (c.somatic) {
-        parts.push("S");
-    }
-    if (c.material) {
-        parts.push(c.cost ? `M (${c.cost} gp)` : "M");
-    }
-    if (c.focus) {
-        parts.push("F");
-    }
-    if (c.divineFocus) {
-        parts.push("DF");
-    }
-    return parts.join(", ") || "—";
-}
+const formatLevel = (s: { name: string; level: number; note: string | null }) =>
+    withNote(`${s.name} ${s.level}`, s.note);
 
 // "Name 2 (class level 5)" — bloodline, patron and mystery spells are granted
 // at a class level that differs from the spell's level
-const formatGranted = (s: { name: string; level: number; classLevel: number }) =>
-    `${s.name} ${s.level} (class level ${s.classLevel})`;
+const formatGranted = (s: { name: string; level: number; classLevel: number; note: string | null }) =>
+    withNote(`${s.name} ${s.level} (class level ${s.classLevel})`, s.note);
+
+const formatSource = (s: SpellDetail["sources"][number]) => s.page ? `${s.book} pg. ${s.page}` : s.book;
 
 interface StatBlockProps {
     label: string;
@@ -68,14 +54,11 @@ const LevelSection: FC<LevelSectionProps> = ({spell}) => {
         .map(([level, names]) => ({level, names: names.sort((a, b) => a.localeCompare(b)).join(", ")}));
 
     const sourceRows = [
-        {label: "Domain", value: spell.domains.map((d) => `${d.name} ${d.level}`)},
-        {label: "Subdomain", value: spell.subdomains.map((d) => `${d.name} ${d.level}`)},
+        {label: "Domain", value: spell.domains.map(formatLevel)},
+        {label: "Subdomain", value: spell.subdomains.map(formatLevel)},
         {label: "Bloodline", value: spell.bloodlines.map(formatGranted)},
         {label: "Patron", value: spell.patrons.map(formatGranted)},
-        {
-            label: "Mystery",
-            value: spell.mysteries.map((m) => `${formatGranted(m)}${m.note ? ` — ${m.note}` : ""}`),
-        },
+        {label: "Mystery", value: spell.mysteries.map(formatGranted)},
     ].filter((row) => row.value.length > 0);
 
     if (classRows.length === 0 && sourceRows.length === 0) {
@@ -113,7 +96,7 @@ const SpellContent: FC<SpellContentProps> = ({spell}) => {
             {schoolName && (
                 <Badge color={SCHOOL_COLORS[schoolName] ?? "gray"} variant="filled" size="md">
                     {schoolName}
-                    {spell.subschool ? ` (${spell.subschool.name})` : ""}
+                    {spell.subschools.length > 0 ? ` (${spell.subschools.map((s) => s.name).join(", ")})` : ""}
                 </Badge>
             )}
             {spell.descriptors.map((d) => (
@@ -127,7 +110,7 @@ const SpellContent: FC<SpellContentProps> = ({spell}) => {
         {/* Casting stats */}
         <SimpleGrid cols={{base: 2, sm: 3}} spacing="md">
             <StatBlock label="Casting Time" value={spell.castingTime}/>
-            <StatBlock label="Components" value={formatComponents(spell.components)}/>
+            <StatBlock label="Components" value={spell.components.text || "—"}/>
             <StatBlock label="Range" value={spell.range}/>
             <StatBlock label="Area" value={spell.area}/>
             <StatBlock label="Effect" value={spell.effect}/>
@@ -140,49 +123,32 @@ const SpellContent: FC<SpellContentProps> = ({spell}) => {
         <Divider/>
         <LevelSection spell={spell}/>
         <Divider/>
-        <Text size="sm" style={PROSE_STYLE}>{spell.description}</Text>
+        <Prose>{spell.description}</Prose>
 
         {spell.mythicText && (
             <>
                 <Divider label="Mythic" labelPosition="left"/>
-                <Text size="sm" style={PROSE_STYLE}>{spell.mythicText}</Text>
+                <Prose>{spell.mythicText}</Prose>
             </>
         )}
-        {spell.augmented && (
-            <>
-                <Divider label="Augmented" labelPosition="left"/>
-                <Text size="sm" style={PROSE_STYLE}>{spell.augmented}</Text>
-            </>
-        )}
+        {spell.extra.map((section, i) => (
+            <Fragment key={i}>
+                <Divider label={section.label} labelPosition="left"/>
+                <Prose>{section.value}</Prose>
+            </Fragment>
+        ))}
 
-        {(spell.permanency || spell.slaLevel !== null || spell.race) && (
+        {spell.race && (
             <>
                 <Divider/>
-                <Group gap="xl">
-                    {spell.permanency && (
-                        <LabeledSection label="Permanency" gap={2}>
-                            <Text size="sm">
-                                CL {spell.permanency.cl ?? "—"}
-                                {spell.permanency.cost ? `, ${spell.permanency.cost} gp` : ""}
-                            </Text>
-                        </LabeledSection>
-                    )}
-                    {spell.slaLevel !== null && (
-                        <LabeledSection label="SLA Level" gap={2}>
-                            <Text size="sm">{spell.slaLevel}</Text>
-                        </LabeledSection>
-                    )}
-                    {spell.race && (
-                        <LabeledSection label="Race" gap={2}>
-                            <Text size="sm">{spell.race}</Text>
-                        </LabeledSection>
-                    )}
-                </Group>
+                <LabeledSection label="Race" gap={2}>
+                    <Text size="sm">{spell.race}</Text>
+                </LabeledSection>
             </>
         )}
 
         <Text size="xs" c="dimmed" ta="right">
-            Source: {spell.sourcebook}
+            Source: {spell.sources.map(formatSource).join("; ") || spell.sourcebook}
             {spell.link && (
                 <> · <a href={spell.link} target="_blank" rel="noreferrer" style={{color: "inherit"}}>AoN ↗</a></>
             )}
@@ -205,7 +171,7 @@ export const SpellModal: FC = () => {
         title={spell?.name}
         styles={layout.styles}
         size="xl"
-        scrollAreaComponent={ScrollArea.Autosize}
+        scrollAreaComponent={layout.scrollAreaComponent}
     >
         <title>{`${spell?.name ?? "Spells"} — Pathfinder 1E`}</title>
         {spell ? (

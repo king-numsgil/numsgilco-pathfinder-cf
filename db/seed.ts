@@ -1,372 +1,319 @@
 /**
  * Pathfinder 1E database seed script.
- * Run with: bun db/seed.ts
+ * Run with: bun db/seed.ts [--dry-run]
  *
- * Reads data/ JSON files and populates the Postgres database
- * using the Drizzle schema in worker/db/schema.ts.
+ * Reads data/codex.json (scraped from Archive of Nethys) and populates the
+ * Postgres database using the Drizzle schema in worker/db/schema.ts.
+ * DESTRUCTIVE: truncates every table first. --dry-run builds all rows and
+ * reports counts and warnings without connecting to the database.
+ *
+ * Records in the codex reference each other by key ("spell:abeyance",
+ * "deity:abadar", …); keys are resolved to freshly generated ULIDs here.
  *
  * Uses the same connection string as the local Hyperdrive simulation so
  * no separate DATABASE_URL env var is needed.
  */
 
+import { sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 import { ulid } from "ulidx";
 import * as schema from "../worker/db/schema";
-import { sql } from "drizzle-orm";
+import type { ExtraSection, FeatMythic, PrereqGroup, SourceRef } from "../worker/db/schema";
 
-// ─── Types mirrored from refresh.ts ──────────────────────────────────────────
+// ─── codex.json shapes ───────────────────────────────────────────────────────
 
-type SpellEntry = {
+interface Ref {
     name: string;
-    link: string | null;
-    description: string;
-    rating: number | null;
+    key: string | null;
+}
+
+// One entry of a domain / bloodline / patron / mystery spell list. `text` is
+// the entry as printed, e.g. "elemental body IV (air only)"
+interface SpellGroup {
+    level: number;
+    spells: { name: string; key: string }[];
+    text: string;
+}
+
+interface CodexSpell {
+    key: string;
+    name: string;
+    url: string;
+    pfsLegal: boolean;
+    sources: SourceRef[];
     school: string;
-    subschool: string | null;
-    casting_time: string;
-    range: string;
+    subschools: string[];
+    descriptors: string[];
+    levels: { class: string; level: number }[];
+    deity: Ref | null;
+    castingTime: string;
+    components: {
+        verbal: boolean;
+        somatic: boolean;
+        material: boolean;
+        focus: boolean;
+        divineFocus: boolean;
+        raw: string;
+        materialCostGp: number | null;
+    };
+    range: string | null;
     area: string | null;
     effect: string | null;
-    targets: string | null;
+    target: string | null;
     duration: string;
-    saving_throw: string | null;
-    spell_resistance: string | null;
-    sourcebook: string;
-    dismissible: boolean;
-    shapeable: boolean;
-    verbal: boolean;
-    somatic: boolean;
-    material: boolean;
-    focus: boolean;
-    divine_focus: boolean;
-    component_costs: number | null;
-    permanency: boolean;
-    permanency_cl: number | null;
-    permanency_cost: number | null;
-    sla_level: number | null;
-    race: string | null;
-    mythic_text: string | null;
-    augmented: string | null;
-    // class levels
-    arcanist: number | null; wizard: number | null; sorcerer: number | null;
-    witch: number | null; magus: number | null; bard: number | null;
-    skald: number | null; summoner: number | null; unsummoner: number | null;
-    bloodrager: number | null; shaman: number | null; druid: number | null;
-    hunter: number | null; ranger: number | null; cleric: number | null;
-    oracle: number | null; warpriest: number | null; inquisitor: number | null;
-    antipaladin: number | null; paladin: number | null; alchemist: number | null;
-    investigator: number | null; psychic: number | null; mesmerist: number | null;
-    occultist: number | null; spiritualist: number | null; medium: number | null;
-    // descriptors (booleans)
-    acid: boolean; air: boolean; chaotic: boolean; cold: boolean;
-    curse: boolean; darkness: boolean; death: boolean; disease: boolean;
-    draconic: boolean; earth: boolean; electricity: boolean; emotion: boolean;
-    evil: boolean; fear: boolean; fire: boolean; force: boolean;
-    good: boolean; language_dependent: boolean; lawful: boolean; light: boolean;
-    meditative: boolean; mind_affecting: boolean; pain: boolean; poison: boolean;
-    ruse: boolean; shadow: boolean; sonic: boolean; water: boolean;
-    // relation strings
-    deity: string | null;
-    domain: string | null;
-    bloodline: string | null;
-    patron: string | null;
-};
-
-type DomainList = {
-    [name: string]: { Subdomains: string[]; Deities: string[] };
-};
-
-type MysteryEntry = {
-    Name: string;
-    Deities: string[];
-    Spells: {
-        "Level 2": string | [string, string];
-        "Level 4": string | [string, string];
-        "Level 6": string | [string, string];
-        "Level 8": string | [string, string];
-        "Level 10": string | [string, string];
-        "Level 12": string | [string, string];
-        "Level 14": string | [string, string];
-        "Level 16": string | [string, string];
-        "Level 18": string | [string, string];
-    };
-};
-
-type FeatEntry = {
-    name: string;
-    type: string[];
+    savingThrow: string | null;
+    spellResistance: string | null;
+    otherFields: ExtraSection[];
     description: string;
-    prerequisites: string | null;
-    prerequisite_data: RawPrereqNode[] | null;
+    mythic: { name: string; sources: SourceRef[]; description: string } | null;
+    restriction: string | null;
+}
+
+interface CodexDeity {
+    key: string;
+    name: string;
+    pfsLegal: boolean;
+    pantheon: string;
+    alignment: string;
+    areasOfConcern: string[];
+    favoredWeapon: string | null;
+}
+
+interface CodexDomain {
+    key: string;
+    name: string;
+    deities: Ref[];
+    subdomains: Ref[];
+    spells: SpellGroup[];
+}
+
+interface CodexSubdomain {
+    key: string;
+    name: string;
+    deities: Ref[];
+    replacementSpells: SpellGroup[];
+}
+
+interface CodexBloodline {
+    key: string;
+    name: string;
+    bonusSpells: SpellGroup[];
+}
+
+interface CodexMystery {
+    key: string;
+    name: string;
+    deities: Ref[];
+    bonusSpells: SpellGroup[];
+}
+
+interface CodexPatron {
+    key: string;
+    name: string;
+    spells: SpellGroup[];
+}
+
+interface CodexFeatBody {
+    flavor: string;
+    prerequisitesText: string | null;
+    prerequisites: PrereqGroup[] | null;
     benefit: string;
     normal: string | null;
     special: string | null;
-    race_name: string | null;
-    note: string | null;
+    otherFields: ExtraSection[];
+    sources: SourceRef[];
+}
+
+interface CodexFeat extends CodexFeatBody {
+    key: string;
+    name: string;
+    url: string;
+    pfsLegal: boolean;
+    types: string[];
     goal: string | null;
-    completion_benefit: string | null;
-    source: string;
-    multiples: boolean;
-};
+    completionBenefit: string | null;
+    combatTrick: { sources: SourceRef[]; text: string } | null;
+    mythic: (CodexFeatBody & { name: string }) | null;
+    mythicOnly: boolean;
+}
 
-// ─── Prerequisite normalization types ────────────────────────────────────────
-
-// Raw shapes as they appear in feats.json
-type RawPrereqNode =
-    | { type: "stat"; name: string; value: number; or: RawPrereqNode | null }
-    | { type: "feat"; name: string; note: string | null; or: RawPrereqNode | null }
-    | { type: "skill"; name: string; rank: number; or: RawPrereqNode | null }
-    | { type: "special"; condition: string; or: RawPrereqNode | null };
-
-// Normalized shapes stored in the DB
-type StatSubType = "ability" | "bab" | "caster_level" | "class_level" | "character_level";
-
-type NormPrereqNode =
-    | { type: "stat"; subType: StatSubType; name: string; value: number; or: NormPrereqNode | null }
-    | { type: "feat"; name: string; note: string | null; or: NormPrereqNode | null }
-    | { type: "skill"; name: string; rank: number; or: NormPrereqNode | null }
-    | { type: "class_feature"; feature: string; or: NormPrereqNode | null }
-    | { type: "alignment"; value: string; or: NormPrereqNode | null }
-    | { type: "channel_energy"; minDice: number; or: NormPrereqNode | null }
-    | { type: "special"; condition: string; or: NormPrereqNode | null };
+interface Codex {
+    generatedAt: string;
+    spells: CodexSpell[];
+    deities: CodexDeity[];
+    domains: CodexDomain[];
+    subdomains: CodexSubdomain[];
+    bloodlines: CodexBloodline[];
+    bloodragerBloodlines: CodexBloodline[];
+    mysteries: CodexMystery[];
+    patrons: CodexPatron[];
+    feats: CodexFeat[];
+}
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-function parseEntry(entry: string): [string, number] {
-    const match = entry.trim().match(/^(.+?)\s\((\d+)\)$/);
-    if (!match) throw new Error(`Cannot parse entry: "${entry}"`);
-    return [match[1].trim(), parseInt(match[2], 10)];
+const warnings: string[] = [];
+
+function warn(message: string): void {
+    warnings.push(message);
 }
 
-function normalizeSchool(s: string): string {
-    return s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
+function capitalize(s: string): string {
+    return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
-const FEAT_TYPE_MAP: Record<string, string> = {
-    "combat feat": "Combat",
-    combat: "Combat",
-    general: "General",
-    teamwork: "Teamwork",
-    metamagic: "Metamagic",
-    style: "Style",
-    grit: "Grit",
-    "item creation": "Item Creation",
-    "item mastery": "Item Mastery",
-    "armor mastery": "Armor Mastery",
-    "shield mastery": "Shield Mastery",
-    "weapon mastery": "Weapon Mastery",
-    "blood hex": "Blood Hex",
-    "companion/familiar": "Companion/Familiar",
+function titleCase(s: string): string {
+    return s.replace(/\b[a-z]/g, (c) => c.toUpperCase());
+}
+
+// Resolves codex keys to the ULIDs generated for this seed
+class KeyMap {
+    private readonly ids = new Map<string, string>();
+    private readonly label: string;
+
+    constructor(label: string) {
+        this.label = label;
+    }
+
+    add(key: string): string {
+        if (this.ids.has(key)) {
+            throw new Error(`Duplicate ${this.label} key: ${key}`);
+        }
+        const id = ulid();
+        this.ids.set(key, id);
+        return id;
+    }
+
+    // Looks up a reference, warning (and returning null) when it doesn't resolve
+    resolve(ref: { name: string; key: string | null }, context: string): string | null {
+        const id = ref.key ? this.ids.get(ref.key) : undefined;
+        if (!id) {
+            warn(`${context}: ${this.label} "${ref.name}" (${ref.key ?? "no key"}) not found`);
+            return null;
+        }
+        return id;
+    }
+}
+
+// Spell class keys whose display name isn't just the key title-cased
+const CLASS_NAMES: Record<string, string> = {
+    "summoner (unchained)": "Summoner (Unchained)",
+    redmantisassassin: "Red Mantis Assassin",
+    sahirafiyun: "Sahir-Afiyun",
 };
 
-function normalizeFeatType(t: string): string {
-    const key = t.trim().toLowerCase();
-    return (
-        FEAT_TYPE_MAP[key] ??
-        t.trim().charAt(0).toUpperCase() + t.trim().slice(1)
-    );
+const className = (key: string): string => CLASS_NAMES[key] ?? titleCase(key);
+
+// School "multiple" is Lissalan Snake Sigil (one variant per Thassilonian school)
+const IGNORED_SCHOOLS = new Set(["multiple"]);
+// "curse" is a descriptor scraped into the subschool list
+const SUBSCHOOL_TO_DESCRIPTOR = new Set(["curse"]);
+const IGNORED_SUBSCHOOLS = new Set(["see text"]);
+
+function normalizeDescriptor(d: string): string {
+    if (d === "mindaffecting") {
+        return "mind-affecting";
+    }
+    // "see text for lesser planar ally" and the like
+    if (d.startsWith("see text")) {
+        return "see text";
+    }
+    return d;
 }
 
-// ─── Prerequisite normalization ───────────────────────────────────────────────
-
-const ABILITY_NAMES = new Set(["Strength", "Dexterity", "Constitution", "Intelligence", "Wisdom", "Charisma"]);
-
-function getStatSubType(name: string): StatSubType {
-    if (name === "Base Attack Bonus") return "bab";
-    if (name === "Caster Level") return "caster_level";
-    if (name === "Character Level") return "character_level";
-    if (ABILITY_NAMES.has(name)) return "ability";
-    return "class_level"; // e.g. "Fighter Level", "Mesmerist Level"
+function spellDescriptors(spell: CodexSpell): string[] {
+    const fromSubschools = spell.subschools.filter((s) => SUBSCHOOL_TO_DESCRIPTOR.has(s));
+    return [...new Set([...spell.descriptors, ...fromSubschools].map(normalizeDescriptor))];
 }
 
-const CLASS_FEATURE_RE = / Class Feature$/i;
-// "any X Alignment" is treated identically to "X Alignment"
-const ALIGNMENT_RE = /^(?:any\s+)?(Chaotic|Evil|Good|Lawful|Neutral|Nongood|Nonevil|Nonlawful|Nonchaotic) Alignment$/i;
-const CHANNEL_DICE_RE = /^Channel Energy (\d+)d\d+$/i;
-const SKILL_RANK_RE = /^(.+?)\s+(\d+)\s+ranks?$/i;
-const BAB_SEGMENT_RE = /^base attack bonus \+?(\d+)$/i;
+function spellSubschoolNames(spell: CodexSpell): string[] {
+    return spell.subschools.filter((s) => !SUBSCHOOL_TO_DESCRIPTOR.has(s) && !IGNORED_SUBSCHOOLS.has(s));
+}
+
+// Codex text uses curly apostrophes inconsistently ("nature’s ally")
+const normalizeName = (s: string): string => s.toLowerCase().replace(/[‘’]/g, "'");
+
+// Strips leftover punctuation, footnote asterisks and wrapping parentheses
+function cleanNote(raw: string): string | null {
+    const note = raw.replace(/\s+/g, " ").replace(/^[\s*().,;:/]+|[\s*().,;:/]+$/g, "");
+    // Empty, or a source superscript glued to the name ("delayed consumptionAPG")
+    if (!note || /^[A-Z0-9]{2,4}$/.test(note)) {
+        return null;
+    }
+    return note;
+}
 
 /**
- * Parse a single condition string (possibly a semicolon-split segment) into a
- * normalized node. `or` is the already-normalized or-chain to attach, if any.
+ * Expands a spell list entry into the spells it grants, with the entry's
+ * qualifier as a note. Only spells named before the first sentence break
+ * count: "overwhelming presence. If you are evil, replace … holy aura with
+ * unholy aura" grants overwhelming presence, and the rest becomes the note.
  */
-function parseCondition(
-    condition: string,
-    or: NormPrereqNode | null,
-    featNameMap: Map<string, string>,
-): NormPrereqNode {
-    const s = condition.trim();
+function expandGroup(group: SpellGroup): { key: string; note: string | null }[] {
+    const unique = [...new Map(group.spells.map((s) => [s.key, s])).values()];
+    const [head, ...rest] = group.text.split(/\.(?=\s|\*)/);
+    const headNorm = normalizeName(head);
 
-    const alignMatch = s.match(ALIGNMENT_RE);
-    if (alignMatch) {
-        const v = alignMatch[1];
-        return {type: "alignment", value: v.charAt(0).toUpperCase() + v.slice(1).toLowerCase(), or};
+    let granted = unique.filter((s) => headNorm.includes(normalizeName(s.name)));
+    if (granted.length === 0) {
+        granted = unique;
     }
 
-    const chanMatch = s.match(CHANNEL_DICE_RE);
-    if (chanMatch) {
-        return {type: "channel_energy", minDice: parseInt(chanMatch[1], 10), or};
-    }
-
-    if (CLASS_FEATURE_RE.test(s)) {
-        return {type: "class_feature", feature: s.replace(CLASS_FEATURE_RE, "").trim().toLowerCase(), or};
-    }
-
-    // Skill rank — only matches in compound-split segments; normal skills come
-    // through as type "skill" directly from the JSON
-    const skillMatch = s.match(SKILL_RANK_RE);
-    if (skillMatch) {
-        return {type: "skill", name: skillMatch[1].trim(), rank: parseInt(skillMatch[2], 10), or};
-    }
-
-    // BAB expressed as text inside a compound condition
-    const babMatch = s.match(BAB_SEGMENT_RE);
-    if (babMatch) {
-        return {type: "stat", subType: "bab", name: "Base Attack Bonus", value: parseInt(babMatch[1], 10), or};
-    }
-
-    // Exact feat name (skip strings that contain " or " to avoid false matches)
-    const lower = s.toLowerCase();
-    if (!lower.includes(" or ")) {
-        const originalName = featNameMap.get(lower);
-        if (originalName) {
-            return {type: "feat", name: originalName, note: null, or};
+    // Remove the granted spells' names from the entry; what's left is the note
+    let remainder = head;
+    for (const name of new Set(granted.map((s) => normalizeName(s.name)))) {
+        const at = normalizeName(remainder).indexOf(name);
+        if (at >= 0) {
+            remainder = remainder.slice(0, at) + remainder.slice(at + name.length);
         }
     }
+    const note = cleanNote([remainder, ...rest].join(" "));
 
-    return {type: "special", condition: s, or};
+    return granted.map((s) => ({key: s.key, note}));
 }
 
-/** Normalize one raw node, returning 1-N nodes (>1 only for compound semicolon splits). */
-function normalizeNode(raw: RawPrereqNode, featNameMap: Map<string, string>): NormPrereqNode[] {
-    if (raw.type === "stat") {
-        return [{
-            type: "stat",
-            subType: getStatSubType(raw.name),
-            name: raw.name,
-            value: raw.value,
-            or: normalizeOrChain(raw.or, featNameMap),
-        }];
+// "You can gain this feat multiple times", "You can take Extra Ki more than
+// once", "This feat can be chosen multiple times"
+const MULTIPLES_RE = /\b(?:can|may)\s+(?:gain|take|select|choose|be\s+(?:taken|selected|gained|chosen))\b[^.]{0,60}?\b(?:more than once|multiple times)/i;
+
+function featTypes(feat: CodexFeat): string[] {
+    const types = new Set(feat.types);
+    if (feat.mythicOnly) {
+        types.add("Mythic");
     }
-    if (raw.type === "feat") {
-        return [{type: "feat", name: raw.name, note: raw.note, or: normalizeOrChain(raw.or, featNameMap)}];
+    if (types.size === 0) {
+        types.add("General");
     }
-    if (raw.type === "skill") {
-        return [{type: "skill", name: raw.name, rank: raw.rank, or: normalizeOrChain(raw.or, featNameMap)}];
+    return [...types];
+}
+
+// Options of prerequisites that must be met (not one of several alternatives)
+function requiredOptions(groups: PrereqGroup[] | null) {
+    return (groups ?? []).filter((g) => g.anyOf.length === 1).map((g) => g.anyOf[0]);
+}
+
+function minValue(groups: PrereqGroup[] | null, type: string): number | null {
+    const values = requiredOptions(groups)
+        .filter((o) => o.type === type && o.value !== null)
+        .map((o) => o.value!);
+    return values.length ? Math.max(...values) : null;
+}
+
+// "(Acrobatics)" → "Acrobatics"; source citations like "(Ranged Tactics Toolbox 8)" → null
+function featLinkNote(detail: string | null): string | null {
+    const note = detail?.replace(/^\(|\)$/g, "").trim();
+    if (!note || /\d$/.test(note)) {
+        return null;
     }
-    // type === "special"
-    if (raw.condition.includes(";")) {
-        // Compound data-entry error: split into individual conditions.
-        // The or-chain is dropped (these compound entries never have a non-null or).
-        return raw.condition
-            .split(";")
-            // Strip leading "or " fragments — artifacts of improperly merged conditions
-            .map((s) => s.trim().replace(/^or\s+/i, "").trim())
-            .filter(Boolean)
-            .map((segment) => parseCondition(segment, null, featNameMap));
-    }
-    return [parseCondition(raw.condition, normalizeOrChain(raw.or, featNameMap), featNameMap)];
+    return note;
 }
 
-/** Recursively normalize an or-chain. */
-function normalizeOrChain(raw: RawPrereqNode | null, featNameMap: Map<string, string>): NormPrereqNode | null {
-    if (!raw) return null;
-    return normalizeNode(raw, featNameMap)[0] ?? null;
+function extraSections(fields: ExtraSection[]): ExtraSection[] {
+    return fields
+        .filter((f) => f.value.trim())
+        .map((f) => ({label: f.label.trim() || "Note", value: f.value}));
 }
-
-function normalizePrereqData(raw: RawPrereqNode[] | null, featNameMap: Map<string, string>): NormPrereqNode[] {
-    if (!raw || raw.length === 0) return [];
-    return raw.flatMap((node) => normalizeNode(node, featNameMap));
-}
-
-function extractMinBab(nodes: NormPrereqNode[]): number | null {
-    for (const n of nodes) {
-        if (n.type === "stat" && n.subType === "bab") return n.value;
-    }
-    return null;
-}
-
-function extractMinCasterLevel(nodes: NormPrereqNode[]): number | null {
-    for (const n of nodes) {
-        if (n.type === "stat" && n.subType === "caster_level") return n.value;
-    }
-    return null;
-}
-
-function collectFeatPrereqLinks(
-    nodes: NormPrereqNode[],
-): Array<{requiredFeatName: string; note: string | null}> {
-    // We only index the top-level required feats (not or-chain alternates, which
-    // represent optional choices rather than hard requirements).
-    return nodes
-        .filter((n): n is Extract<NormPrereqNode, {type: "feat"}> => n.type === "feat")
-        .map((n) => ({requiredFeatName: n.name, note: n.note}));
-}
-
-function collectDescriptors(spell: SpellEntry): string[] {
-    const descriptors: string[] = [];
-    if (spell.acid) descriptors.push("acid");
-    if (spell.air) descriptors.push("air");
-    if (spell.chaotic) descriptors.push("chaotic");
-    if (spell.cold) descriptors.push("cold");
-    if (spell.curse) descriptors.push("curse");
-    if (spell.darkness) descriptors.push("darkness");
-    if (spell.death) descriptors.push("death");
-    if (spell.disease) descriptors.push("disease");
-    if (spell.draconic) descriptors.push("draconic");
-    if (spell.earth) descriptors.push("earth");
-    if (spell.electricity) descriptors.push("electricity");
-    if (spell.emotion) descriptors.push("emotion");
-    if (spell.evil) descriptors.push("evil");
-    if (spell.fear) descriptors.push("fear");
-    if (spell.fire) descriptors.push("fire");
-    if (spell.force) descriptors.push("force");
-    if (spell.good) descriptors.push("good");
-    if (spell.language_dependent) descriptors.push("language-dependent");
-    if (spell.lawful) descriptors.push("lawful");
-    if (spell.light) descriptors.push("light");
-    if (spell.meditative) descriptors.push("meditative");
-    if (spell.mind_affecting) descriptors.push("mind-affecting");
-    if (spell.pain) descriptors.push("pain");
-    if (spell.poison) descriptors.push("poison");
-    if (spell.ruse) descriptors.push("ruse");
-    if (spell.shadow) descriptors.push("shadow");
-    if (spell.sonic) descriptors.push("sonic");
-    if (spell.water) descriptors.push("water");
-    return descriptors;
-}
-
-// Map spell field name → class name (from the full class list)
-const CLASS_FIELD_MAP: [keyof SpellEntry, string][] = [
-    ["arcanist", "Arcanist"],
-    ["wizard", "Wizard"],
-    ["sorcerer", "Sorcerer"],
-    ["witch", "Witch"],
-    ["magus", "Magus"],
-    ["bard", "Bard"],
-    ["skald", "Skald"],
-    ["summoner", "Summoner"],
-    ["unsummoner", "Summoner (Unchained)"],
-    ["bloodrager", "Bloodrager"],
-    ["shaman", "Shaman"],
-    ["druid", "Druid"],
-    ["hunter", "Hunter"],
-    ["ranger", "Ranger"],
-    ["cleric", "Cleric"],
-    ["oracle", "Oracle"],
-    ["warpriest", "Warpriest"],
-    ["inquisitor", "Inquisitor"],
-    ["antipaladin", "Antipaladin"],
-    ["paladin", "Paladin"],
-    ["alchemist", "Alchemist"],
-    ["investigator", "Investigator"],
-    ["psychic", "Psychic"],
-    ["mesmerist", "Mesmerist"],
-    ["occultist", "Occultist"],
-    ["spiritualist", "Spiritualist"],
-    ["medium", "Medium"],
-];
 
 async function batchInsert<T>(
     label: string,
@@ -384,27 +331,393 @@ async function batchInsert<T>(
     console.log();
 }
 
-// ─── Main ─────────────────────────────────────────────────────────────────────
+// ─── Load ────────────────────────────────────────────────────────────────────
 
-const url =
-    process.env.CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE;
-if (!url) throw new Error("CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE not set");
+const dryRun = process.argv.includes("--dry-run");
 
-const client = postgres(url, { max: 3, ssl: "require" });
-const db = drizzle(client, { schema });
-
-// Load JSON data
-console.log("Loading JSON data files...");
-const spellData: SpellEntry[] = await Bun.file("./data/spell_codex.json").json();
-const featData: FeatEntry[] = await Bun.file("./data/feats.json").json();
-const domainData: DomainList = await Bun.file("./data/domains.json").json();
-const mysteryData: MysteryEntry[] = await Bun.file("./data/OracleMysteries.json").json();
+console.log("Loading data/codex.json...");
+const codex: Codex = await Bun.file("./data/codex.json").json();
 console.log(
-    `  Loaded: ${spellData.length} spells, ${featData.length} feats, ` +
-    `${Object.keys(domainData).length} domains, ${mysteryData.length} mysteries`,
+    `  Generated ${codex.generatedAt}: ${codex.spells.length} spells, ${codex.feats.length} feats, ` +
+    `${codex.deities.length} deities, ${codex.domains.length} domains, ${codex.subdomains.length} subdomains, ` +
+    `${codex.bloodlines.length}+${codex.bloodragerBloodlines.length} bloodlines, ` +
+    `${codex.patrons.length} patrons, ${codex.mysteries.length} mysteries`,
 );
 
-// ─── Truncate all tables (clean slate) ───────────────────────────────────────
+// ─── Build rows ──────────────────────────────────────────────────────────────
+// Every row is built up front (IDs included) so --dry-run can validate the
+// whole data set, and inserts need no round-trips to resolve references.
+
+type Row<T extends { $inferInsert: unknown }> = T["$inferInsert"];
+
+const spellIds = new KeyMap("spell");
+const deityIds = new KeyMap("deity");
+const domainIds = new KeyMap("domain");
+const subdomainIds = new KeyMap("subdomain");
+const bloodlineIds = new KeyMap("bloodline");
+const patronIds = new KeyMap("patron");
+const mysteryIds = new KeyMap("mystery");
+const featIds = new KeyMap("feat");
+
+// Spell IDs first: every spell list refers to them
+for (const spell of codex.spells) {
+    spellIds.add(spell.key);
+}
+
+// Junction rows keyed by their primary key, so duplicates are dropped (and reported)
+class JunctionRows<T> {
+    private readonly rows = new Map<string, T>();
+    private readonly label: string;
+
+    constructor(label: string) {
+        this.label = label;
+    }
+
+    add(pk: string[], row: T, context: string): void {
+        const id = pk.join("|");
+        if (this.rows.has(id)) {
+            warn(`${context}: duplicate ${this.label} row ignored`);
+            return;
+        }
+        this.rows.set(id, row);
+    }
+
+    get values(): T[] {
+        return [...this.rows.values()];
+    }
+}
+
+// Lookups: classes, schools and subschools are whatever the spells use
+
+// Codex name (e.g. "redmantisassassin") → generated ID
+const lookupIds = (names: string[]) => new Map([...new Set(names)].map((name) => [name, ulid()]));
+const lookupRows = (ids: Map<string, string>, display: (name: string) => string) =>
+    [...ids].map(([name, id]) => ({id, name: display(name)}));
+
+const classIds = lookupIds(codex.spells.flatMap((s) => s.levels.map((l) => l.class)));
+const classRows = lookupRows(classIds, className);
+
+const schoolIds = lookupIds(codex.spells.map((s) => s.school).filter((name) => !IGNORED_SCHOOLS.has(name)));
+const schoolRows = lookupRows(schoolIds, capitalize);
+
+const subschoolIds = lookupIds(codex.spells.flatMap(spellSubschoolNames));
+const subschoolRows = lookupRows(subschoolIds, capitalize);
+
+const deityRows: Row<typeof schema.deities>[] = codex.deities.map((d) => ({
+    id: deityIds.add(d.key),
+    name: d.name,
+    pantheon: d.pantheon,
+    alignment: d.alignment,
+    areasOfConcern: d.areasOfConcern,
+    favoredWeapon: d.favoredWeapon,
+    pfsLegal: d.pfsLegal,
+}));
+
+// Domains & subdomains
+
+const domainRows = codex.domains.map((d) => ({id: domainIds.add(d.key), name: d.name}));
+const subdomainRows = codex.subdomains.map((d) => ({id: subdomainIds.add(d.key), name: d.name}));
+
+const domainSubdomains = new JunctionRows<Row<typeof schema.domainSubdomains>>("domain_subdomains");
+const domainDeities = new JunctionRows<Row<typeof schema.domainDeities>>("domain_deities");
+const subdomainDeities = new JunctionRows<Row<typeof schema.subdomainDeities>>("subdomain_deities");
+const domainSpells = new JunctionRows<Row<typeof schema.domainSpells>>("domain_spells");
+const subdomainSpells = new JunctionRows<Row<typeof schema.subdomainSpells>>("subdomain_spells");
+
+for (const domain of codex.domains) {
+    const context = `Domain ${domain.name}`;
+    const domainId = domainIds.resolve(domain, context)!;
+
+    for (const ref of domain.subdomains) {
+        const subdomainId = subdomainIds.resolve(ref, context);
+        if (subdomainId) {
+            domainSubdomains.add([domainId, subdomainId], {domainId, subdomainId}, context);
+        }
+    }
+    for (const ref of domain.deities) {
+        const deityId = deityIds.resolve(ref, context);
+        if (deityId) {
+            domainDeities.add([domainId, deityId], {domainId, deityId}, context);
+        }
+    }
+    for (const group of domain.spells) {
+        for (const {key, note} of expandGroup(group)) {
+            const spellId = spellIds.resolve({name: key, key}, context);
+            if (spellId) {
+                domainSpells.add([spellId, domainId], {spellId, domainId, level: group.level, note}, context);
+            }
+        }
+    }
+}
+
+for (const subdomain of codex.subdomains) {
+    const context = `Subdomain ${subdomain.name}`;
+    const subdomainId = subdomainIds.resolve(subdomain, context)!;
+
+    for (const ref of subdomain.deities) {
+        const deityId = deityIds.resolve(ref, context);
+        if (deityId) {
+            subdomainDeities.add([subdomainId, deityId], {subdomainId, deityId}, context);
+        }
+    }
+    for (const group of subdomain.replacementSpells) {
+        for (const {key, note} of expandGroup(group)) {
+            const spellId = spellIds.resolve({name: key, key}, context);
+            if (spellId) {
+                subdomainSpells.add(
+                    [spellId, subdomainId],
+                    {spellId, subdomainId, level: group.level, note},
+                    context,
+                );
+            }
+        }
+    }
+}
+
+// Bloodlines (sorcerer and bloodrager), patrons and mysteries. Their spell
+// lists are keyed by the CLASS level at which each spell is granted.
+
+const bloodlineRows: Row<typeof schema.bloodlines>[] = [
+    ...codex.bloodlines.map((b) => ({id: bloodlineIds.add(b.key), name: b.name, bloodrager: false})),
+    ...codex.bloodragerBloodlines.map((b) => ({
+        id: bloodlineIds.add(b.key),
+        name: `${b.name} (Bloodrager)`,
+        bloodrager: true,
+    })),
+];
+const patronRows = codex.patrons.map((p) => ({id: patronIds.add(p.key), name: p.name}));
+const mysteryRows = codex.mysteries.map((m) => ({id: mysteryIds.add(m.key), name: m.name}));
+
+const bloodlineSpells = new JunctionRows<Row<typeof schema.bloodlineSpells>>("bloodline_spells");
+const patronSpells = new JunctionRows<Row<typeof schema.patronSpells>>("patron_spells");
+const mysterySpells = new JunctionRows<Row<typeof schema.mysterySpells>>("mystery_spells");
+const mysteryDeities = new JunctionRows<Row<typeof schema.mysteryDeities>>("mystery_deities");
+
+for (const bloodline of [...codex.bloodlines, ...codex.bloodragerBloodlines]) {
+    const context = `Bloodline ${bloodline.key}`;
+    const bloodlineId = bloodlineIds.resolve(bloodline, context)!;
+    for (const group of bloodline.bonusSpells) {
+        for (const {key, note} of expandGroup(group)) {
+            const spellId = spellIds.resolve({name: key, key}, context);
+            if (spellId) {
+                bloodlineSpells.add(
+                    [spellId, bloodlineId],
+                    {spellId, bloodlineId, classLevel: group.level, note},
+                    context,
+                );
+            }
+        }
+    }
+}
+
+for (const patron of codex.patrons) {
+    const context = `Patron ${patron.name}`;
+    const patronId = patronIds.resolve(patron, context)!;
+    for (const group of patron.spells) {
+        for (const {key, note} of expandGroup(group)) {
+            const spellId = spellIds.resolve({name: key, key}, context);
+            if (spellId) {
+                patronSpells.add([spellId, patronId], {spellId, patronId, classLevel: group.level, note}, context);
+            }
+        }
+    }
+}
+
+for (const mystery of codex.mysteries) {
+    const context = `Mystery ${mystery.name}`;
+    const mysteryId = mysteryIds.resolve(mystery, context)!;
+    for (const ref of mystery.deities) {
+        const deityId = deityIds.resolve(ref, context);
+        if (deityId) {
+            mysteryDeities.add([mysteryId, deityId], {mysteryId, deityId}, context);
+        }
+    }
+    for (const group of mystery.bonusSpells) {
+        for (const {key, note} of expandGroup(group)) {
+            const spellId = spellIds.resolve({name: key, key}, context);
+            if (spellId) {
+                mysterySpells.add(
+                    [mysteryId, spellId, String(group.level)],
+                    {mysteryId, spellId, classLevel: group.level, note},
+                    context,
+                );
+            }
+        }
+    }
+}
+
+// Spells
+
+const spellRows: Row<typeof schema.spells>[] = [];
+const spellSubschools = new JunctionRows<Row<typeof schema.spellSubschools>>("spell_subschools");
+const spellClasses = new JunctionRows<Row<typeof schema.spellClasses>>("spell_classes");
+
+for (const spell of codex.spells) {
+    const context = `Spell ${spell.name}`;
+    const spellId = spellIds.resolve(spell, context)!;
+    const c = spell.components;
+
+    spellRows.push({
+        id: spellId,
+        name: spell.name,
+        link: spell.url,
+        description: spell.description,
+        mythicText: spell.mythic?.description ?? null,
+        pfsLegal: spell.pfsLegal,
+        schoolId: schoolIds.get(spell.school) ?? null,
+        deityId: spell.deity ? deityIds.resolve(spell.deity, context) : null,
+        castingTime: spell.castingTime,
+        range: spell.range ?? "",
+        area: spell.area,
+        effect: spell.effect,
+        targets: spell.target,
+        duration: spell.duration,
+        savingThrow: spell.savingThrow,
+        spellResistance: spell.spellResistance,
+        sourcebook: spell.sources[0]?.book ?? "",
+        sources: spell.sources,
+        dismissible: spell.duration.includes("(D)"),
+        shapeable: `${spell.area ?? ""} ${spell.effect ?? ""}`.includes("(S)"),
+        verbal: c.verbal,
+        somatic: c.somatic,
+        material: c.material,
+        focus: c.focus,
+        divineFocus: c.divineFocus,
+        componentCost: c.materialCostGp,
+        componentsText: c.raw,
+        race: spell.restriction ? capitalize(spell.restriction) : null,
+        descriptors: spellDescriptors(spell),
+        extra: extraSections(spell.otherFields),
+    });
+
+    for (const name of spellSubschoolNames(spell)) {
+        const subschoolId = subschoolIds.get(name)!;
+        spellSubschools.add([spellId, subschoolId], {spellId, subschoolId}, context);
+    }
+    for (const {class: key, level} of spell.levels) {
+        const classId = classIds.get(key)!;
+        spellClasses.add([spellId, classId], {spellId, classId, level}, context);
+    }
+}
+
+// Feats
+
+for (const feat of codex.feats) {
+    featIds.add(feat.key);
+}
+
+const featRows: Row<typeof schema.feats>[] = [];
+const featPrerequisites = new JunctionRows<Row<typeof schema.featPrerequisites>>("feat_prerequisites");
+
+for (const feat of codex.feats) {
+    const context = `Feat ${feat.name}`;
+    const featId = featIds.resolve(feat, context)!;
+
+    const mythic: FeatMythic | null = feat.mythic && {
+        name: feat.mythic.name,
+        flavor: feat.mythic.flavor,
+        prerequisites: feat.mythic.prerequisitesText,
+        benefit: feat.mythic.benefit,
+        special: feat.mythic.special,
+        sources: feat.mythic.sources,
+    };
+
+    featRows.push({
+        id: featId,
+        name: feat.name,
+        link: feat.url,
+        pfsLegal: feat.pfsLegal,
+        types: featTypes(feat),
+        description: feat.flavor,
+        prerequisites: feat.prerequisitesText,
+        prerequisiteData: feat.prerequisites,
+        benefit: feat.benefit,
+        normal: feat.normal,
+        special: feat.special,
+        goal: feat.goal,
+        completionBenefit: feat.completionBenefit,
+        combatTrick: feat.combatTrick?.text ?? null,
+        mythic,
+        extra: extraSections(feat.otherFields),
+        source: feat.sources[0]?.book ?? "",
+        sources: feat.sources,
+        multiples: MULTIPLES_RE.test(feat.special ?? ""),
+        minBab: minValue(feat.prerequisites, "baseAttackBonus"),
+        minCasterLevel: minValue(feat.prerequisites, "casterLevel"),
+    });
+
+    // Feat graph: only hard requirements, not one-of-several alternatives
+    for (const option of requiredOptions(feat.prerequisites)) {
+        if (option.type !== "feat" || !option.key) {
+            continue;
+        }
+        const requiredFeatId = featIds.resolve({name: option.text, key: option.key}, context);
+        if (requiredFeatId && requiredFeatId !== featId) {
+            featPrerequisites.add(
+                [featId, requiredFeatId],
+                {featId, requiredFeatId, note: featLinkNote(option.detail)},
+                context,
+            );
+        }
+    }
+}
+
+// ─── Report ──────────────────────────────────────────────────────────────────
+
+const tables: [string, unknown[]][] = [
+    ["classes", classRows],
+    ["schools", schoolRows],
+    ["subschools", subschoolRows],
+    ["deities", deityRows],
+    ["domains", domainRows],
+    ["subdomains", subdomainRows],
+    ["domain_subdomains", domainSubdomains.values],
+    ["domain_deities", domainDeities.values],
+    ["subdomain_deities", subdomainDeities.values],
+    ["bloodlines", bloodlineRows],
+    ["patrons", patronRows],
+    ["mysteries", mysteryRows],
+    ["mystery_deities", mysteryDeities.values],
+    ["spells", spellRows],
+    ["spell_subschools", spellSubschools.values],
+    ["spell_classes", spellClasses.values],
+    ["domain_spells", domainSpells.values],
+    ["subdomain_spells", subdomainSpells.values],
+    ["bloodline_spells", bloodlineSpells.values],
+    ["patron_spells", patronSpells.values],
+    ["mystery_spells", mysterySpells.values],
+    ["feats", featRows],
+    ["feat_prerequisites", featPrerequisites.values],
+];
+
+console.log("\nRows:");
+for (const [name, rows] of tables) {
+    console.log(`  ${name.padEnd(20)} ${rows.length}`);
+}
+
+if (warnings.length) {
+    console.log(`\n${warnings.length} warning(s):`);
+    for (const w of warnings) {
+        console.log(`  ${w}`);
+    }
+}
+
+if (dryRun) {
+    console.log("\nDry run: database not touched.");
+    process.exit(0);
+}
+
+// ─── Insert ──────────────────────────────────────────────────────────────────
+
+const url = process.env.CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE;
+if (!url) {
+    throw new Error("CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE not set");
+}
+
+// The real database requires TLS; a local throwaway Postgres doesn't offer it
+const isLocal = /@(localhost|127\.0\.0\.1)[:/]/.test(url);
+const client = postgres(url, {max: 3, ssl: isLocal ? false : "require", onnotice: () => {}});
+const db = drizzle(client, {schema});
 
 console.log("\nTruncating existing data...");
 await db.execute(sql`
@@ -415,433 +728,40 @@ await db.execute(sql`
         subdomain_spells, domain_spells,
         subdomain_deities, domain_deities,
         domain_subdomains, subdomains, domains,
-        spell_classes, spells,
+        spell_classes, spell_subschools, spells,
         deities, subschools, schools, classes,
         feat_prerequisites, feats
     RESTART IDENTITY CASCADE
 `);
-console.log("  Done.");
 
-// ─── Phase 1: Lookup tables ───────────────────────────────────────────────────
+console.log("Inserting...");
 
-console.log("\nPhase 1: Lookup tables...");
-
-const CLASS_NAMES = [
-    "Alchemist", "Antipaladin", "Arcanist", "Barbarian", "Barbarian (Unchained)",
-    "Bard", "Bloodrager", "Brawler", "Cavalier", "Cleric", "Druid", "Fighter",
-    "Gunslinger", "Hunter", "Inquisitor", "Investigator", "Kineticist", "Magus",
-    "Medium", "Mesmerist", "Monk", "Monk (Unchained)", "Ninja", "Occultist",
-    "Oracle", "Paladin", "Psychic", "Ranger", "Rogue", "Rogue (Unchained)",
-    "Samurai", "Shaman", "Shifter", "Skald", "Slayer", "Sorcerer", "Spiritualist",
-    "Summoner", "Summoner (Unchained)", "Swashbuckler", "Vigilante", "Warpriest",
-    "Witch", "Wizard",
-];
-
-const SCHOOL_NAMES = [
-    "Abjuration", "Conjuration", "Divination", "Enchantment",
-    "Evocation", "Illusion", "Necromancy", "Transmutation", "Universal",
-];
-
-const SUBSCHOOL_NAMES = [
-    "Calling", "Charm", "Compulsion", "Creation", "Figment", "Glamer",
-    "Haunted", "Healing", "Pattern", "Phantasm", "Polymorph",
-    "Scrying", "Shadow", "Summoning", "Teleportation",
-];
-
-// Collect all unique deity names across all sources
-const allDeityNames = new Set<string>();
-for (const domain of Object.values(domainData)) {
-    for (const d of domain.Deities) allDeityNames.add(d);
-}
-for (const spell of spellData) {
-    if (spell.deity) allDeityNames.add(spell.deity);
-}
-for (const mystery of mysteryData) {
-    for (const d of mystery.Deities) allDeityNames.add(d);
-}
-
-// Generate IDs upfront so lookup maps are built without a DB round-trip
-const classRows = CLASS_NAMES.map((name) => ({ id: ulid(), name }));
-const schoolRows = SCHOOL_NAMES.map((name) => ({ id: ulid(), name }));
-const subschoolRows = SUBSCHOOL_NAMES.map((name) => ({ id: ulid(), name }));
-const deityRows = [...allDeityNames].map((name) => ({ id: ulid(), name }));
-
+// In foreign-key order
 await db.insert(schema.classes).values(classRows);
-console.log(`  Classes: ${classRows.length}`);
-
 await db.insert(schema.schools).values(schoolRows);
-console.log(`  Schools: ${schoolRows.length}`);
-
 await db.insert(schema.subschools).values(subschoolRows);
-console.log(`  Subschools: ${subschoolRows.length}`);
-
-await db.insert(schema.deities).values(deityRows);
-console.log(`  Deities: ${deityRows.length}`);
-
-// Build lookup maps (name → id) from the pre-generated rows
-const classMap = new Map(classRows.map((r) => [r.name, r.id]));
-const schoolMap = new Map(schoolRows.map((r) => [r.name.toLowerCase(), r.id]));
-const subschoolMap = new Map(subschoolRows.map((r) => [r.name.toLowerCase(), r.id]));
-const deityMap = new Map(deityRows.map((r) => [r.name.toLowerCase(), r.id]));
-
-// ─── Phase 2: Domains & Subdomains ───────────────────────────────────────────
-
-console.log("\nPhase 2: Domains & Subdomains...");
-
-const domainRows = Object.keys(domainData).map((name) => ({ id: ulid(), name }));
+await batchInsert("deities", deityRows, (b) => db.insert(schema.deities).values(b));
 await db.insert(schema.domains).values(domainRows);
-const domainMap = new Map(domainRows.map((r) => [r.name.toLowerCase(), r.id]));
-
-// Collect unique subdomain names (a subdomain like "Shadow" belongs to multiple domains)
-const uniqueSubdomainNames = new Set<string>();
-for (const { Subdomains } of Object.values(domainData)) {
-    for (const name of Subdomains) uniqueSubdomainNames.add(name);
-}
-
-const subdomainRows = [...uniqueSubdomainNames].map((name) => ({ id: ulid(), name }));
-if (subdomainRows.length) {
-    await db.insert(schema.subdomains).values(subdomainRows);
-}
-const subdomainMap = new Map(subdomainRows.map((r) => [r.name.toLowerCase(), r.id]));
-
-const domainSubdomainRows: { domainId: string; subdomainId: string }[] = [];
-const domainDeityRows: { domainId: string; deityId: string }[] = [];
-const subdomainDeityRows: { subdomainId: string; deityId: string }[] = [];
-
-for (const [domainName, { Subdomains, Deities }] of Object.entries(domainData)) {
-    const domainId = domainMap.get(domainName.toLowerCase())!;
-
-    for (const deityName of Deities) {
-        const deityId = deityMap.get(deityName.toLowerCase());
-        if (deityId) domainDeityRows.push({ domainId, deityId });
-    }
-
-    for (const subName of Subdomains) {
-        const subdomainId = subdomainMap.get(subName.toLowerCase());
-        if (!subdomainId) continue;
-        domainSubdomainRows.push({ domainId, subdomainId });
-
-        // Subdomains inherit their parent domain's deities
-        for (const deityName of Deities) {
-            const deityId = deityMap.get(deityName.toLowerCase());
-            if (deityId) subdomainDeityRows.push({ subdomainId, deityId });
-        }
-    }
-}
-
-if (domainSubdomainRows.length) {
-    await batchInsert("domain_subdomains", domainSubdomainRows, (batch) =>
-        db.insert(schema.domainSubdomains).values(batch).onConflictDoNothing());
-}
-if (domainDeityRows.length) {
-    await batchInsert("domain_deities", domainDeityRows, (batch) =>
-        db.insert(schema.domainDeities).values(batch).onConflictDoNothing());
-}
-if (subdomainDeityRows.length) {
-    await batchInsert("subdomain_deities", subdomainDeityRows, (batch) =>
-        db.insert(schema.subdomainDeities).values(batch).onConflictDoNothing());
-}
-
-console.log(
-    `  Domains: ${domainRows.length}, ` +
-    `Subdomains: ${subdomainRows.length}, ` +
-    `Domain-Subdomain links: ${domainSubdomainRows.length}, ` +
-    `Domain-Deity links: ${domainDeityRows.length}`,
-);
-
-// ─── Phase 3: Spells ─────────────────────────────────────────────────────────
-
-console.log("\nPhase 3: Spells...");
-
-// Apply known data fixes from original refresh.ts
-for (const spell of spellData) {
-    if (spell.name === "Gate") spell.subschool = "calling";
-    if (spell.name === "Mislead") spell.subschool = "glamer";
-    if (spell.name === "Vomit Twin") spell.subschool = "creation";
-}
-
-// First pass: collect all bloodline + patron names so we can insert them upfront
-const bloodlineNames = new Set<string>();
-const patronNames = new Set<string>();
-for (const spell of spellData) {
-    if (spell.bloodline) {
-        for (const entry of spell.bloodline.split(",")) {
-            try { bloodlineNames.add(parseEntry(entry)[0]); } catch { /* skip */ }
-        }
-    }
-    if (spell.patron) {
-        for (const entry of spell.patron.split(",")) {
-            try { patronNames.add(parseEntry(entry)[0]); } catch { /* skip */ }
-        }
-    }
-}
-
-const bloodlineRows = [...bloodlineNames].map((name) => ({ id: ulid(), name }));
-const patronRows = [...patronNames].map((name) => ({ id: ulid(), name }));
-
-if (bloodlineRows.length) await db.insert(schema.bloodlines).values(bloodlineRows);
-if (patronRows.length) await db.insert(schema.patrons).values(patronRows);
-
-const bloodlineMap = new Map(bloodlineRows.map((r) => [r.name.toLowerCase(), r.id]));
-const patronMap = new Map(patronRows.map((r) => [r.name.toLowerCase(), r.id]));
-console.log(`  Bloodlines: ${bloodlineRows.length}, Patrons: ${patronRows.length}`);
-
-// Generate spell IDs upfront — no need for .returning()
-const spellIds = spellData.map(() => ulid());
-
-// Build spell insert rows and junction rows in a single pass
-const spellInsertRows: typeof schema.spells.$inferInsert[] = [];
-const spellClassRows: { spellId: string; classId: string; level: number }[] = [];
-const domainSpellRows: { spellId: string; domainId: string; level: number }[] = [];
-const subdomainSpellRows: { spellId: string; subdomainId: string; level: number }[] = [];
-const bloodlineSpellRows: { spellId: string; bloodlineId: string; classLevel: number }[] = [];
-const patronSpellRows: { spellId: string; patronId: string; classLevel: number }[] = [];
-
-// Build spell name → id map for mystery lookups
-const spellNameMap = new Map<string, string>();
-
-for (let i = 0; i < spellData.length; i++) {
-    const spell = spellData[i];
-    const spellId = spellIds[i];
-
-    spellNameMap.set(spell.name.toLowerCase(), spellId);
-
-    spellInsertRows.push({
-        id: spellId,
-        name: spell.name,
-        link: spell.link,
-        description: spell.description,
-        mythicText: spell.mythic_text,
-        augmented: spell.augmented,
-        rating: spell.rating,
-        schoolId: spell.school !== "see text"
-            ? schoolMap.get(normalizeSchool(spell.school).toLowerCase()) ?? null
-            : null,
-        subschoolId: spell.subschool
-            ? subschoolMap.get(spell.subschool.toLowerCase()) ?? null
-            : null,
-        deityId: spell.deity
-            ? deityMap.get(spell.deity.toLowerCase()) ?? null
-            : null,
-        castingTime: spell.casting_time ?? "",
-        range: spell.range ?? "",
-        area: spell.area,
-        effect: spell.effect,
-        targets: spell.targets,
-        duration: spell.duration ?? "",
-        savingThrow: spell.saving_throw,
-        spellResistance: spell.spell_resistance,
-        sourcebook: spell.sourcebook,
-        dismissible: spell.dismissible,
-        shapeable: spell.shapeable,
-        verbal: spell.verbal,
-        somatic: spell.somatic,
-        material: spell.material,
-        focus: spell.focus,
-        divineFocus: spell.divine_focus,
-        componentCost: spell.component_costs,
-        permanency: spell.permanency,
-        permanencyCl: spell.permanency_cl,
-        permanencyCost: spell.permanency_cost,
-        slaLevel: spell.sla_level,
-        race: spell.race,
-        descriptors: collectDescriptors(spell),
-    });
-
-    // Class levels
-    for (const [field, className] of CLASS_FIELD_MAP) {
-        const level = spell[field] as number | null;
-        const classId = classMap.get(className);
-        if (level !== null && classId) spellClassRows.push({ spellId, classId, level });
-    }
-
-    // Domains & subdomains
-    if (spell.domain) {
-        for (const entry of spell.domain.split(",")) {
-            try {
-                const [name, level] = parseEntry(entry);
-                const domainId = domainMap.get(name.toLowerCase());
-                const subdomainId = subdomainMap.get(name.toLowerCase());
-                if (domainId) {
-                    domainSpellRows.push({ spellId, domainId, level });
-                } else if (subdomainId) {
-                    subdomainSpellRows.push({ spellId, subdomainId, level });
-                } else {
-                    console.warn(`  WARN: "${name}" not found in domains or subdomains (spell: ${spell.name})`);
-                }
-            } catch {
-                console.warn(`  WARN: Could not parse domain entry "${entry}" for spell "${spell.name}"`);
-            }
-        }
-    }
-
-    // Bloodlines
-    if (spell.bloodline) {
-        for (const entry of spell.bloodline.split(",")) {
-            try {
-                const [name, classLevel] = parseEntry(entry);
-                const bloodlineId = bloodlineMap.get(name.toLowerCase());
-                if (bloodlineId) bloodlineSpellRows.push({ spellId, bloodlineId, classLevel });
-            } catch { /* skip */ }
-        }
-    }
-
-    // Patrons
-    if (spell.patron) {
-        for (const entry of spell.patron.split(",")) {
-            try {
-                const [name, classLevel] = parseEntry(entry);
-                const patronId = patronMap.get(name.toLowerCase());
-                if (patronId) patronSpellRows.push({ spellId, patronId, classLevel });
-            } catch { /* skip */ }
-        }
-    }
-}
-
-await batchInsert("spells", spellInsertRows, (batch) =>
-    db.insert(schema.spells).values(batch));
-
-await batchInsert("spell_classes", spellClassRows, (batch) =>
-    db.insert(schema.spellClasses).values(batch).onConflictDoNothing());
-
-await batchInsert("domain_spells", domainSpellRows, (batch) =>
-    db.insert(schema.domainSpells).values(batch).onConflictDoNothing());
-
-await batchInsert("subdomain_spells", subdomainSpellRows, (batch) =>
-    db.insert(schema.subdomainSpells).values(batch).onConflictDoNothing());
-
-await batchInsert("bloodline_spells", bloodlineSpellRows, (batch) =>
-    db.insert(schema.bloodlineSpells).values(batch).onConflictDoNothing());
-
-await batchInsert("patron_spells", patronSpellRows, (batch) =>
-    db.insert(schema.patronSpells).values(batch).onConflictDoNothing());
-
-// ─── Phase 4: Oracle Mysteries ────────────────────────────────────────────────
-
-console.log("\nPhase 4: Oracle Mysteries...");
-
-const mysteryRows = mysteryData.map(({ Name }) => ({ id: ulid(), name: Name }));
+await db.insert(schema.subdomains).values(subdomainRows);
+await batchInsert("domain_subdomains", domainSubdomains.values, (b) => db.insert(schema.domainSubdomains).values(b));
+await batchInsert("domain_deities", domainDeities.values, (b) => db.insert(schema.domainDeities).values(b));
+await batchInsert("subdomain_deities", subdomainDeities.values, (b) => db.insert(schema.subdomainDeities).values(b));
+await db.insert(schema.bloodlines).values(bloodlineRows);
+await db.insert(schema.patrons).values(patronRows);
 await db.insert(schema.mysteries).values(mysteryRows);
-const mysteryMap = new Map(mysteryRows.map((r) => [r.name, r.id]));
+await batchInsert("mystery_deities", mysteryDeities.values, (b) => db.insert(schema.mysteryDeities).values(b));
 
-const mysteryDeityRows: { mysteryId: string; deityId: string }[] = [];
-const mysterySpellRows: {
-    mysteryId: string; spellId: string; classLevel: number; note: string | null;
-}[] = [];
+await batchInsert("spells", spellRows, (b) => db.insert(schema.spells).values(b));
+await batchInsert("spell_subschools", spellSubschools.values, (b) => db.insert(schema.spellSubschools).values(b));
+await batchInsert("spell_classes", spellClasses.values, (b) => db.insert(schema.spellClasses).values(b), 1000);
+await batchInsert("domain_spells", domainSpells.values, (b) => db.insert(schema.domainSpells).values(b));
+await batchInsert("subdomain_spells", subdomainSpells.values, (b) => db.insert(schema.subdomainSpells).values(b));
+await batchInsert("bloodline_spells", bloodlineSpells.values, (b) => db.insert(schema.bloodlineSpells).values(b));
+await batchInsert("patron_spells", patronSpells.values, (b) => db.insert(schema.patronSpells).values(b));
+await batchInsert("mystery_spells", mysterySpells.values, (b) => db.insert(schema.mysterySpells).values(b));
 
-const MYSTERY_LEVELS = [2, 4, 6, 8, 10, 12, 14, 16, 18] as const;
-
-for (const entry of mysteryData) {
-    const mysteryId = mysteryMap.get(entry.Name)!;
-
-    for (const deityName of entry.Deities) {
-        const deityId = deityMap.get(deityName.toLowerCase());
-        if (deityId) mysteryDeityRows.push({ mysteryId, deityId });
-    }
-
-    for (const level of MYSTERY_LEVELS) {
-        const raw = entry.Spells[`Level ${level}`];
-        const [spellName, note] = Array.isArray(raw) ? raw : [raw, null];
-        const spellId = spellNameMap.get(spellName.toLowerCase());
-        if (spellId === undefined) {
-            console.warn(`  WARN: Mystery spell "${spellName}" not found (${entry.Name})`);
-            continue;
-        }
-        mysterySpellRows.push({ mysteryId, spellId, classLevel: level, note });
-    }
-}
-
-if (mysteryDeityRows.length) {
-    await batchInsert("mystery_deities", mysteryDeityRows, (batch) =>
-        db.insert(schema.mysteryDeities).values(batch).onConflictDoNothing());
-}
-if (mysterySpellRows.length) {
-    await batchInsert("mystery_spells", mysterySpellRows, (batch) =>
-        db.insert(schema.mysterySpells).values(batch).onConflictDoNothing());
-}
-
-console.log(`  Mysteries: ${mysteryData.length}`);
-
-// ─── Phase 5: Feats ───────────────────────────────────────────────────────────
-
-console.log("\nPhase 5: Feats...");
-
-// Generate all feat IDs up-front (positional — one ULID per array slot so
-// duplicate-named feats each get a unique ID).
-const featIds: string[] = featData.map(() => ulid());
-
-// Name-lookup maps take only the FIRST occurrence of each lowercase name so
-// that prerequisite cross-references resolve to a stable, unique target.
-const featIdByName = new Map<string, string>();  // lowercase name → ulid of first occurrence
-const featNameMap = new Map<string, string>();   // lowercase name → original-case name (first)
-for (let i = 0; i < featData.length; i++) {
-    const lower = featData[i].name.toLowerCase();
-    if (!featIdByName.has(lower)) {
-        featIdByName.set(lower, featIds[i]);
-        featNameMap.set(lower, featData[i].name);
-    }
-}
-
-const featInsertRows: typeof schema.feats.$inferInsert[] = [];
-const featPrereqRows: typeof schema.featPrerequisites.$inferInsert[] = [];
-
-for (let i = 0; i < featData.length; i++) {
-    const feat = featData[i];
-    const featId = featIds[i];
-    const normPrereqs = normalizePrereqData(feat.prerequisite_data, featNameMap);
-
-    featInsertRows.push({
-        id: featId,
-        name: feat.name,
-        types: [...new Set(feat.type.map(normalizeFeatType))],
-        description: feat.description,
-        prerequisites: feat.prerequisites,
-        prerequisiteData: normPrereqs.length > 0 ? normPrereqs : null,
-        benefit: feat.benefit,
-        normal: feat.normal,
-        special: feat.special,
-        raceName: feat.race_name,
-        note: feat.note,
-        goal: feat.goal,
-        completionBenefit: feat.completion_benefit,
-        source: feat.source,
-        multiples: feat.multiples,
-        minBab: extractMinBab(normPrereqs),
-        minCasterLevel: extractMinCasterLevel(normPrereqs),
-    });
-
-    for (const {requiredFeatName, note} of collectFeatPrereqLinks(normPrereqs)) {
-        const requiredFeatId = featIdByName.get(requiredFeatName.toLowerCase());
-        if (requiredFeatId) {
-            featPrereqRows.push({featId, requiredFeatId, note});
-        }
-    }
-}
-
-await batchInsert("feats", featInsertRows, (batch) =>
-    db.insert(schema.feats).values(batch));
-
-if (featPrereqRows.length) {
-    await batchInsert("feat_prerequisites", featPrereqRows, (batch) =>
-        db.insert(schema.featPrerequisites).values(batch).onConflictDoNothing());
-}
-
-// ─── Summary ─────────────────────────────────────────────────────────────────
+await batchInsert("feats", featRows, (b) => db.insert(schema.feats).values(b));
+await batchInsert("feat_prerequisites", featPrerequisites.values, (b) => db.insert(schema.featPrerequisites).values(b));
 
 console.log("\n✓ Seed complete!");
-const counts = await Promise.all([
-    db.select({count: sql<number>`count(*)`}).from(schema.spells),
-    db.select({count: sql<number>`count(*)`}).from(schema.feats),
-    db.select({count: sql<number>`count(*)`}).from(schema.featPrerequisites),
-    db.select({count: sql<number>`count(*)`}).from(schema.spellClasses),
-    db.select({count: sql<number>`count(*)`}).from(schema.domains),
-    db.select({count: sql<number>`count(*)`}).from(schema.mysteries),
-]);
-console.log(`  Spells:             ${counts[0][0].count}`);
-console.log(`  Feats:              ${counts[1][0].count}`);
-console.log(`  Feat prereq edges:  ${counts[2][0].count}`);
-console.log(`  Spell-classes:      ${counts[3][0].count}`);
-console.log(`  Domains:            ${counts[4][0].count}`);
-console.log(`  Mysteries:          ${counts[5][0].count}`);
-
 await client.end();

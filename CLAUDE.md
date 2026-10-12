@@ -15,7 +15,7 @@ bun run ui <route>   # UI harness: screenshot + layout/console report (see below
 bun run db:push      # Push schema changes directly to the database (no migration files)
 bun run db:generate  # Generate Drizzle migration SQL files
 bun run db:studio    # Open Drizzle Studio GUI
-bun run db:seed      # DESTRUCTIVE: TRUNCATE CASCADE all tables then re-seed from data/*.json
+bun run db:seed      # DESTRUCTIVE: TRUNCATE CASCADE all tables then re-seed from data/codex.json
 bun run cf-typegen   # Regenerate worker-configuration.d.ts from wrangler.jsonc bindings
 ```
 
@@ -50,12 +50,14 @@ drizzle.config.ts      — Reads .env for DB URL; used by drizzle-kit commands
 - All primary keys are **ULIDs** (text), generated with `ulidx`. Never use integer sequences.
 - **Subdomains are shared across multiple domains** (e.g. "Shadow" belongs to both Darkness and Death). The M2M relationship is modeled via `domain_subdomains` junction table — `subdomains.name` is unique and there is no `domainId` FK on the subdomains table.
 - **Bloodline, patron and mystery junction tables store the CLASS level** at which the spell is granted, not the spell level (see Worker / API for the conversion).
+- **Seed data is `data/codex.json`** (Archive of Nethys scrape; the older `spell_codex.json`, `feats.json`, `domains.json`, `OracleMysteries.json` are no longer read). Records reference each other by codex key (`spell:abeyance`); `db/seed.ts` maps keys to ULIDs. `bun db/seed.ts --dry-run` validates the data and reports counts/warnings without touching the DB.
+- Spell and feat text columns hold **Markdown** (`*spell names*`, `**bold**`, tables). Spells can have several subschools (`spell_subschools`). Junction `note` columns hold list-entry qualifiers ("air only").
 
 ### Worker / API
 
 - Spell search (`GET /api/spells`) uses **EXISTS correlated subqueries** built by `buildWhere()` in `worker/routes/spells.ts`, driven by the `SOURCES` table. Source types (class, domain, subdomain, bloodline, patron, mystery) are OR'd. Level constraints are baked into each source subquery. When only a level filter is present (no source filter), the level is OR'd across all six junction tables.
 - Each spell list row carries `level` = lowest matching spell level (`buildLevelExpr()`); `sort=level` orders by it.
-- `SOURCES[*].level` converts class level → spell level: sorcerer bloodlines `(cl-1)/2` (granted at 3, 5, …, 19), bloodrager bloodlines — name ends in `(BloodRager)` — `(cl-4)/3` (7, 10, 13, 16), patrons and mysteries `cl/2` (2, 4, …, 18). The detail endpoint returns both `level` and `classLevel`.
+- `SOURCES[*].level` converts class level → spell level: sorcerer bloodlines `(cl-1)/2` (granted at 3, 5, …, 19), bloodrager bloodlines — `bloodlines.bloodrager`, named e.g. `Aberrant (Bloodrager)` — `(cl-4)/3` (7, 10, 13, 16), patrons and mysteries `cl/2` (2, 4, …, 18). The detail endpoint returns both `level` and `classLevel`.
 - Filter parameters accept **comma-separated IDs** (e.g. `school=id1,id2`), split by `parseIds()` / `parseLevels()` in `params.ts`. `limit`/`offset` are coerced and clamped by `paginationSchema` (bad values → 400). Name search escapes LIKE wildcards (`escapeLike()`).
 - Lookup routes send `Cache-Control: public, max-age=3600`; the SPA also caches them in memory (`once()` in `src/api/index.ts`).
 - `GET /api/domains` returns `{ id, name, subdomains: [] }` — the subdomain nesting is built at query time from `domainSubdomains`.

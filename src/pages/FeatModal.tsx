@@ -6,7 +6,6 @@ import {
     Loader,
     Modal,
     Paper,
-    ScrollArea,
     SimpleGrid,
     Stack,
     Text,
@@ -17,6 +16,7 @@ import { type FeatDetail, fetchFeat } from "../api";
 import { FEAT_TYPE_COLORS } from "./featFilterState";
 import { useDetailModalLayout } from "./detailModal";
 import { useCloseModal, useNestedModalState } from "./listNavigation";
+import { Prose } from "./Prose";
 import { LabeledSection, SectionLabel } from "./SectionLabel";
 import { useDetail } from "./useDetail";
 
@@ -30,8 +30,7 @@ const InfoBlock: FC<InfoBlockProps> = ({label, value}) => {
         return null;
     }
     return <LabeledSection label={label} gap={4}>
-        {/* Source text uses newlines for paragraphs and lists */}
-        <Text size="sm" style={{lineHeight: 1.7, whiteSpace: "pre-line"}}>{value}</Text>
+        <Prose>{value}</Prose>
     </LabeledSection>;
 };
 
@@ -103,13 +102,31 @@ const FeatContent: FC<FeatContentProps> = ({feat}) => {
         <InfoBlock label="Benefit" value={feat.benefit}/>
         <InfoBlock label="Normal" value={feat.normal}/>
         <InfoBlock label="Special" value={feat.special}/>
-        <InfoBlock label="Note" value={feat.note}/>
+        {feat.extra.map((section, i) => (
+            <InfoBlock key={i} label={section.label} value={section.value}/>
+        ))}
 
         {(feat.goal || feat.completionBenefit) && (
             <>
                 <Divider/>
                 <InfoBlock label="Goal" value={feat.goal}/>
                 <InfoBlock label="Completion Benefit" value={feat.completionBenefit}/>
+            </>
+        )}
+
+        {feat.combatTrick && (
+            <>
+                <Divider/>
+                <InfoBlock label="Combat Trick" value={feat.combatTrick}/>
+            </>
+        )}
+
+        {feat.mythic && (
+            <>
+                <Divider label={feat.mythic.name} labelPosition="left"/>
+                <InfoBlock label="Prerequisites" value={feat.mythic.prerequisites}/>
+                <InfoBlock label="Benefit" value={feat.mythic.benefit}/>
+                <InfoBlock label="Special" value={feat.mythic.special}/>
             </>
         )}
 
@@ -128,7 +145,12 @@ const FeatContent: FC<FeatContentProps> = ({feat}) => {
         )}
 
         <Divider/>
-        <Text size="xs" c="dimmed" ta="right">Source: {feat.source}</Text>
+        <Text size="xs" c="dimmed" ta="right">
+            Source: {feat.sources.map((s) => s.page ? `${s.book} pg. ${s.page}` : s.book).join("; ") || feat.source}
+            {feat.link && (
+                <> · <a href={feat.link} target="_blank" rel="noreferrer" style={{color: "inherit"}}>AoN ↗</a></>
+            )}
+        </Text>
     </Stack>;
 };
 
@@ -147,7 +169,7 @@ export const FeatModal: FC = () => {
         title={feat?.name}
         styles={layout.styles}
         size="lg"
-        scrollAreaComponent={ScrollArea.Autosize}
+        scrollAreaComponent={layout.scrollAreaComponent}
     >
         <title>{`${feat?.name ?? "Feats"} — Pathfinder 1E`}</title>
         {feat ? (

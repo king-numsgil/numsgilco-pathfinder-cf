@@ -1,4 +1,9 @@
+import { ScrollArea } from "@mantine/core";
 import { useMediaQuery } from "@mantine/hooks";
+
+// Autosize gives its content `min-width: min-content`, so one wide child (a
+// Markdown table) would widen the whole body; tables scroll on their own instead
+const DetailScrollArea = ScrollArea.Autosize.withProps({styles: {content: {minWidth: 0}}});
 
 /**
  * Shared layout for the spell / feat detail modals: the record's name is a
@@ -10,6 +15,7 @@ export const useDetailModalLayout = () => {
 
     return {
         fullScreen: isMobile,
+        scrollAreaComponent: DetailScrollArea,
         transitionProps: isMobile ? {transition: "fade" as const} : {},
         styles: {
             title: {fontWeight: 700, fontSize: "var(--mantine-font-size-xl)"},
