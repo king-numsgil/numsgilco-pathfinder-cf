@@ -17,7 +17,7 @@ const withNote = (text: string, note: string | null) => note ? `${text} — ${no
 const formatLevel = (s: { name: string; level: number; note: string | null }) =>
     withNote(`${s.name} ${s.level}`, s.note);
 
-// "Name 2 (class level 5)" — bloodline, patron and mystery spells are granted
+// "Name 2 (class level 5)" — bloodline, patron, mystery and discipline spells are granted
 // at a class level that differs from the spell's level
 const formatGranted = (s: { name: string; level: number; classLevel: number; note: string | null }) =>
     withNote(`${s.name} ${s.level} (class level ${s.classLevel})`, s.note);
@@ -60,6 +60,7 @@ const LevelSection: FC<LevelSectionProps> = ({spell}) => {
         {label: "Bloodline", value: spell.bloodlines.map(formatGranted)},
         {label: "Patron", value: spell.patrons.map(formatGranted)},
         {label: "Mystery", value: spell.mysteries.map(formatGranted)},
+        {label: "Discipline", value: spell.disciplines.map(formatGranted)},
     ].filter((row) => row.value.length > 0);
 
     if (classRows.length === 0 && sourceRows.length === 0) {

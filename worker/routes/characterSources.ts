@@ -3,7 +3,7 @@ import { alias } from "drizzle-orm/pg-core";
 import { z } from "zod";
 import type { AppDb } from "../db";
 import * as s from "../db/schema";
-import { bloodlineLevel, evenClassLevel } from "./spells";
+import { bloodlineLevel, disciplineLevel, evenClassLevel } from "./spells";
 
 // ─── Input ────────────────────────────────────────────────────────────────────
 
@@ -22,6 +22,7 @@ const LOOKUP = {
     bloodline: s.bloodlines,
     patron: s.patrons,
     mystery: s.mysteries,
+    discipline: s.psychicDisciplines,
 } as const;
 
 /** Null when every source exists (and every subdomain belongs to its domain), else the problem. */
@@ -71,7 +72,8 @@ const cs = s.characterSources;
 /** A character's sources with their names, by type then name. */
 export async function loadSources(db: AppDb, characterId: string) {
     const name = sql<string>`coalesce(
-        ${s.domains.name}, ${s.subdomains.name}, ${s.bloodlines.name}, ${s.patrons.name}, ${s.mysteries.name}, '?'
+        ${s.domains.name}, ${s.subdomains.name}, ${s.bloodlines.name}, ${s.patrons.name}, ${s.mysteries.name},
+        ${s.psychicDisciplines.name}, '?'
     )`;
     return db
         .select({
@@ -88,6 +90,7 @@ export async function loadSources(db: AppDb, characterId: string) {
         .leftJoin(s.bloodlines, and(eq(cs.type, "bloodline"), eq(s.bloodlines.id, cs.sourceId)))
         .leftJoin(s.patrons, and(eq(cs.type, "patron"), eq(s.patrons.id, cs.sourceId)))
         .leftJoin(s.mysteries, and(eq(cs.type, "mystery"), eq(s.mysteries.id, cs.sourceId)))
+        .leftJoin(s.psychicDisciplines, and(eq(cs.type, "discipline"), eq(s.psychicDisciplines.id, cs.sourceId)))
         .leftJoin(parentDomain, eq(parentDomain.id, cs.domainId))
         .where(eq(cs.characterId, characterId))
         .orderBy(asc(cs.type), asc(name));
@@ -120,13 +123,14 @@ const SOURCE_LABEL: Record<s.SourceType, string> = {
     bloodline: "bloodline",
     patron: "patron",
     mystery: "mystery",
+    discipline: "discipline",
 };
 
 /**
  * Spells the character's sources grant at this point: domain and subdomain
  * spells up to the highest spell level the character has slots for (all of
- * them if no slots are set yet); bloodline, patron and mystery spells whose
- * class level the character has reached. A subdomain's list is its domain's
+ * them if no slots are set yet); bloodline, patron, mystery and discipline
+ * spells whose class level the character has reached. A subdomain's list is its domain's
  * with the replacement spells swapped in at their levels.
  */
 export async function grantedSpells(
@@ -144,8 +148,9 @@ export async function grantedSpells(
     const bloodlineIds = idsOf("bloodline");
     const patronIds = idsOf("patron");
     const mysteryIds = idsOf("mystery");
+    const disciplineIds = idsOf("discipline");
 
-    const [domainRows, subdomainRows, bloodlineRows, patronRows, mysteryRows] = await Promise.all([
+    const [domainRows, subdomainRows, bloodlineRows, patronRows, mysteryRows, disciplineRows] = await Promise.all([
         domainIds.length === 0 ? [] : db
             .select({...spellColumns, level: s.domainSpells.level, note: s.domainSpells.note, ownerId: s.domainSpells.domainId})
             .from(s.domainSpells)
@@ -183,6 +188,17 @@ export async function grantedSpells(
             .innerJoin(s.spells, eq(s.spells.id, s.mysterySpells.spellId))
             .leftJoin(s.schools, eq(s.schools.id, s.spells.schoolId))
             .where(and(inArray(s.mysterySpells.mysteryId, mysteryIds), lte(s.mysterySpells.classLevel, character.level))),
+        disciplineIds.length === 0 ? [] : db
+            .select({
+                ...spellColumns,
+                classLevel: s.disciplineSpells.classLevel,
+                note: s.disciplineSpells.note,
+                ownerId: s.disciplineSpells.disciplineId,
+            })
+            .from(s.disciplineSpells)
+            .innerJoin(s.spells, eq(s.spells.id, s.disciplineSpells.spellId))
+            .leftJoin(s.schools, eq(s.schools.id, s.spells.schoolId))
+            .where(and(inArray(s.disciplineSpells.disciplineId, disciplineIds), lte(s.disciplineSpells.classLevel, character.level))),
     ]);
 
     // One entry per spell and level; a spell granted twice lists both sources
@@ -233,6 +249,11 @@ export async function grantedSpells(
             case "mystery":
                 for (const row of mysteryRows.filter((r) => r.ownerId === src.sourceId)) {
                     grant(row, evenClassLevel(row.classLevel), src);
+                }
+                break;
+            case "discipline":
+                for (const row of disciplineRows.filter((r) => r.ownerId === src.sourceId)) {
+                    grant(row, disciplineLevel(row.classLevel), src);
                 }
                 break;
         }

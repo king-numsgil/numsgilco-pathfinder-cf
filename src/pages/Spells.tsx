@@ -22,6 +22,7 @@ import {
     fetchBloodlines,
     fetchClasses,
     fetchDescriptors,
+    fetchDisciplines,
     fetchDomains,
     fetchMysteries,
     fetchPatrons,
@@ -56,6 +57,7 @@ interface Lookups {
     bloodlines: LookupItem[];
     patrons: LookupItem[];
     mysteries: LookupItem[];
+    disciplines: LookupItem[];
 }
 
 const EMPTY_LOOKUPS: Lookups = {
@@ -67,6 +69,7 @@ const EMPTY_LOOKUPS: Lookups = {
     bloodlines: [],
     patrons: [],
     mysteries: [],
+    disciplines: [],
 };
 
 interface SortHeaderProps {
@@ -109,8 +112,9 @@ export const Spells: FC = () => {
             fetchBloodlines(),
             fetchPatrons(),
             fetchMysteries(),
-        ]).then(([schools, subschools, descriptors, classes, domains, bloodlines, patrons, mysteries]) => {
-            setLookups({schools, subschools, descriptors, classes, domains, bloodlines, patrons, mysteries});
+            fetchDisciplines(),
+        ]).then(([schools, subschools, descriptors, classes, domains, bloodlines, patrons, mysteries, disciplines]) => {
+            setLookups({schools, subschools, descriptors, classes, domains, bloodlines, patrons, mysteries, disciplines});
             setLookupError(false);
         }).catch(() => {
             setLookupError(true);

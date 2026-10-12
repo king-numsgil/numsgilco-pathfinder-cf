@@ -94,6 +94,14 @@ export const fetchMysteries = once(async (): Promise<LookupItem[]> => {
     return res.json();
 });
 
+export const fetchDisciplines = once(async (): Promise<LookupItem[]> => {
+    const res = await client.api.disciplines.$get();
+    if (!res.ok) {
+        throw new Error("Failed to fetch psychic disciplines");
+    }
+    return res.json();
+});
+
 export const fetchDomains = once(async (): Promise<DomainWithSubdomains[]> => {
     const res = await client.api.domains.$get();
     if (!res.ok) {

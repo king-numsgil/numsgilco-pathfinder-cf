@@ -24,6 +24,7 @@ interface Props {
     bloodlines: LookupItem[];
     patrons: LookupItem[];
     mysteries: LookupItem[];
+    disciplines: LookupItem[];
 }
 
 export const SpellFilters: FC<Props> =
@@ -43,6 +44,7 @@ export const SpellFilters: FC<Props> =
          bloodlines,
          patrons,
          mysteries,
+         disciplines,
      }) => {
         const availableSubdomains = useMemo(() => {
             const source = filters.domainIds.length
@@ -211,6 +213,18 @@ export const SpellFilters: FC<Props> =
                         value={filters.mysteryIds}
                         onChange={(v) => onChange("mysteryIds", v)}
                         placeholder="Any mystery"
+                        searchable
+                        clearable
+                        maxDropdownHeight={200}
+                    />
+                </LabeledSection>
+
+                <LabeledSection label="Psychic Discipline">
+                    <MultiSelect
+                        data={toOptions(disciplines)}
+                        value={filters.disciplineIds}
+                        onChange={(v) => onChange("disciplineIds", v)}
+                        placeholder="Any discipline"
                         searchable
                         clearable
                         maxDropdownHeight={200}

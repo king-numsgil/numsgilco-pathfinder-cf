@@ -127,6 +127,13 @@ export const mysteryDeities = pgTable(
     (t) => [primaryKey({columns: [t.mysteryId, t.deityId]})],
 );
 
+// ─── Psychic Disciplines ──────────────────────────────────────────────────────
+
+export const psychicDisciplines = pgTable("psychic_disciplines", {
+    id: text("id").primaryKey(),
+    name: text("name").notNull().unique(),
+});
+
 // ─── Spells ───────────────────────────────────────────────────────────────────
 
 // Text columns (description, mythic text, extra sections) hold Markdown
@@ -202,7 +209,7 @@ export const spellClasses = pgTable(
     (t) => [primaryKey({columns: [t.spellId, t.classId]})],
 );
 
-// The `note` on domain, subdomain, bloodline, patron and mystery spells is the
+// The `note` on domain, subdomain, bloodline, patron, mystery and discipline spells is the
 // list entry's qualifier, e.g. "air only" for "elemental body IV (air only)"
 
 // Spell ↔ Domain (with spell level)
@@ -284,6 +291,22 @@ export const mysterySpells = pgTable(
         note: text("note"),
     },
     (t) => [primaryKey({columns: [t.mysteryId, t.spellId, t.classLevel]})],
+);
+
+// Spell ↔ Psychic discipline (with class level)
+export const disciplineSpells = pgTable(
+    "discipline_spells",
+    {
+        spellId: text("spell_id")
+            .notNull()
+            .references(() => spells.id),
+        disciplineId: text("discipline_id")
+            .notNull()
+            .references(() => psychicDisciplines.id),
+        classLevel: smallint("class_level").notNull(),
+        note: text("note"),
+    },
+    (t) => [primaryKey({columns: [t.spellId, t.disciplineId]})],
 );
 
 // ─── Feats ────────────────────────────────────────────────────────────────────
@@ -455,10 +478,10 @@ export const characters = pgTable(
     (t) => [index("characters_user_id_idx").on(t.userId)],
 );
 
-export const SOURCE_TYPES = ["domain", "subdomain", "bloodline", "patron", "mystery"] as const;
+export const SOURCE_TYPES = ["domain", "subdomain", "bloodline", "patron", "mystery", "discipline"] as const;
 export type SourceType = (typeof SOURCE_TYPES)[number];
 
-// Class features that grant spells: domains, bloodlines… Any number of any type
+// Class features that grant spells: domains, bloodlines, psychic disciplines… Any number of any type
 // (archetypes mix them freely). `sourceId` points into the table named by
 // `type`; a subdomain also records the domain it was taken from, whose list it
 // modifies (subdomains are shared between domains).
@@ -520,6 +543,7 @@ export const spellsRelations = relations(spells, ({one, many}) => ({
     bloodlineSpells: many(bloodlineSpells),
     patronSpells: many(patronSpells),
     mysterySpells: many(mysterySpells),
+    disciplineSpells: many(disciplineSpells),
 }));
 
 export const spellClassesRelations = relations(spellClasses, ({one}) => ({
@@ -611,6 +635,15 @@ export const mysterySpellsRelations = relations(mysterySpells, ({one}) => ({
     spell: one(spells, {fields: [mysterySpells.spellId], references: [spells.id]}),
 }));
 
+export const psychicDisciplinesRelations = relations(psychicDisciplines, ({many}) => ({
+    disciplineSpells: many(disciplineSpells),
+}));
+
+export const disciplineSpellsRelations = relations(disciplineSpells, ({one}) => ({
+    discipline: one(psychicDisciplines, {fields: [disciplineSpells.disciplineId], references: [psychicDisciplines.id]}),
+    spell: one(spells, {fields: [disciplineSpells.spellId], references: [spells.id]}),
+}));
+
 export const domainSpellsRelations = relations(domainSpells, ({one}) => ({
     domain: one(domains, {fields: [domainSpells.domainId], references: [domains.id]}),
     spell: one(spells, {fields: [domainSpells.spellId], references: [spells.id]}),
@@ -656,3 +689,4 @@ export type Deity = typeof deities.$inferSelect;
 export type Mystery = typeof mysteries.$inferSelect;
 export type Bloodline = typeof bloodlines.$inferSelect;
 export type Patron = typeof patrons.$inferSelect;
+export type PsychicDiscipline = typeof psychicDisciplines.$inferSelect;

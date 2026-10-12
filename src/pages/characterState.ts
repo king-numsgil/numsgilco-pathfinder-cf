@@ -8,6 +8,7 @@ export const SOURCE_TYPE_LABELS: Record<SourceType, string> = {
     bloodline: "Bloodline",
     patron: "Patron",
     mystery: "Mystery",
+    discipline: "Discipline",
 };
 
 // "Fire domain", "Shadow subdomain (Darkness)"
@@ -57,7 +58,7 @@ export const spellLevelFor = (spell: SpellDetail, classId: string): number => {
     }
     const levels = [
         ...spell.classes, ...spell.domains, ...spell.subdomains,
-        ...spell.bloodlines, ...spell.patrons, ...spell.mysteries,
+        ...spell.bloodlines, ...spell.patrons, ...spell.mysteries, ...spell.disciplines,
     ].map((s) => s.level);
     return levels.length ? Math.min(...levels) : 0;
 };

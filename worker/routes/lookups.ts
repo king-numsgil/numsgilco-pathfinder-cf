@@ -12,7 +12,8 @@ type NamedTable =
     | typeof s.deities
     | typeof s.bloodlines
     | typeof s.patrons
-    | typeof s.mysteries;
+    | typeof s.mysteries
+    | typeof s.psychicDisciplines;
 
 function listNamed(connectionString: string, table: NamedTable): Promise<{ id: string; name: string }[]> {
     const db = createDb(connectionString);
@@ -38,6 +39,7 @@ const app = new Hono<HonoEnv>()
     .get("/bloodlines", async (c) => c.json(await listNamed(c.env.HYPERDRIVE.connectionString, s.bloodlines)))
     .get("/patrons", async (c) => c.json(await listNamed(c.env.HYPERDRIVE.connectionString, s.patrons)))
     .get("/mysteries", async (c) => c.json(await listNamed(c.env.HYPERDRIVE.connectionString, s.mysteries)))
+    .get("/disciplines", async (c) => c.json(await listNamed(c.env.HYPERDRIVE.connectionString, s.psychicDisciplines)))
     .get("/domains", async (c) => {
         const db = createDb(c.env.HYPERDRIVE.connectionString);
         const rows = await db.query.domains.findMany({

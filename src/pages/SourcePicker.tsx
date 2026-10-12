@@ -1,7 +1,8 @@
 import { Group, Pill, Select, Stack, Text } from "@mantine/core";
 import { type FC, useEffect, useState } from "react";
 import {
-    type DomainWithSubdomains, fetchBloodlines, fetchDomains, fetchMysteries, fetchPatrons, type LookupItem,
+    type DomainWithSubdomains, fetchBloodlines, fetchDisciplines, fetchDomains, fetchMysteries, fetchPatrons,
+    type LookupItem,
 } from "../api";
 import { SOURCE_TYPE_LABELS, type SourceEntry, sourceLabel, type SourceType } from "./characterState";
 import { SectionLabel } from "./SectionLabel";
@@ -11,6 +12,7 @@ interface Lookups {
     bloodlines: LookupItem[];
     patrons: LookupItem[];
     mysteries: LookupItem[];
+    disciplines: LookupItem[];
 }
 
 interface Option {
@@ -36,8 +38,18 @@ const options = (type: SourceType, lookups: Lookups): OptionData => {
             return plain(lookups.patrons);
         case "mystery":
             return plain(lookups.mysteries);
+        case "discipline":
+            return plain(lookups.disciplines);
     }
 };
+
+const PLAIN_LISTS = {
+    domain: "domains",
+    bloodline: "bloodlines",
+    patron: "patrons",
+    mystery: "mysteries",
+    discipline: "disciplines",
+} as const satisfies Record<Exclude<SourceType, "subdomain">, keyof Lookups>;
 
 const toEntry = (type: SourceType, value: string, lookups: Lookups): SourceEntry | null => {
     if (type === "subdomain") {
@@ -48,10 +60,7 @@ const toEntry = (type: SourceType, value: string, lookups: Lookups): SourceEntry
             ? {type, sourceId: subdomain.id, domainId: domain.id, label: sourceLabel(subdomain.name, type, domain.name)}
             : null;
     }
-    const list = type === "domain" ? lookups.domains
-        : type === "bloodline" ? lookups.bloodlines
-            : type === "patron" ? lookups.patrons
-                : lookups.mysteries;
+    const list: LookupItem[] = lookups[PLAIN_LISTS[type]];
     const item = list.find((i) => i.id === value);
     return item ? {type, sourceId: item.id, domainId: null, label: sourceLabel(item.name, type)} : null;
 };
@@ -61,15 +70,16 @@ interface SourcePickerProps {
     onChange: (sources: SourceEntry[]) => void;
 }
 
-/** Domains, subdomains, bloodlines, patrons and mysteries: any number, any mix. */
+/** Domains, subdomains, bloodlines, patrons, mysteries and disciplines: any number, any mix. */
 export const SourcePicker: FC<SourcePickerProps> = ({value, onChange}) => {
     const [type, setType] = useState<SourceType>("domain");
     const [lookups, setLookups] = useState<Lookups | null>(null);
 
     useEffect(() => {
-        Promise.all([fetchDomains(), fetchBloodlines(), fetchPatrons(), fetchMysteries()])
-            .then(([domains, bloodlines, patrons, mysteries]) => setLookups({domains, bloodlines, patrons, mysteries}))
-            .catch(() => setLookups({domains: [], bloodlines: [], patrons: [], mysteries: []}));
+        Promise.all([fetchDomains(), fetchBloodlines(), fetchPatrons(), fetchMysteries(), fetchDisciplines()])
+            .then(([domains, bloodlines, patrons, mysteries, disciplines]) =>
+                setLookups({domains, bloodlines, patrons, mysteries, disciplines}))
+            .catch(() => setLookups({domains: [], bloodlines: [], patrons: [], mysteries: [], disciplines: []}));
     }, []);
 
     const add = (selected: string | null) => {

@@ -10,10 +10,11 @@ import { escapeLike, paginationSchema, parseIds, parseLevels } from "./params";
 type HonoEnv = { Bindings: Env };
 
 // ─── Spell level conversion ───────────────────────────────────────────────────
-// Bloodline, patron and mystery tables store the CLASS level at which a spell is
-// granted, not the spell's level. Sorcerer bloodlines grant at 3, 5, …, 19
-// (spell level 1–9), bloodrager bloodlines at 7, 10, 13, 16 (spell level 1–4),
-// and witch patrons / oracle mysteries at 2, 4, …, 18 (spell level 1–9).
+// Bloodline, patron, mystery and discipline tables store the CLASS level at
+// which a spell is granted, not the spell's level. Sorcerer bloodlines grant at
+// 3, 5, …, 19 (spell level 1–9), bloodrager bloodlines at 7, 10, 13, 16 (spell
+// level 1–4), witch patrons / oracle mysteries at 2, 4, …, 18 (spell level 1–9)
+// and psychic disciplines at 1, 4, 6, …, 18 (spell level 1–9).
 
 const bloodlineSpellLevel = sql`CASE
     WHEN ${s.bloodlineSpells.bloodlineId} IN (
@@ -30,6 +31,10 @@ export function bloodlineLevel(bloodrager: boolean, classLevel: number): number 
 
 export function evenClassLevel(classLevel: number): number {
     return classLevel / 2;
+}
+
+export function disciplineLevel(classLevel: number): number {
+    return Math.max(1, Math.floor(classLevel / 2));
 }
 
 // ─── Spell sources ────────────────────────────────────────────────────────────
@@ -78,6 +83,13 @@ const SOURCES = {
         spellId: s.mysterySpells.spellId,
         sourceId: s.mysterySpells.mysteryId,
         level: sql`${s.mysterySpells.classLevel} / 2`,
+    },
+    discipline: {
+        table: s.disciplineSpells,
+        spellId: s.disciplineSpells.spellId,
+        sourceId: s.disciplineSpells.disciplineId,
+        // Integer division: class level 1 → 0, hence GREATEST
+        level: sql`GREATEST(1, ${s.disciplineSpells.classLevel} / 2)`,
     },
 } satisfies Record<string, SpellSource>;
 
@@ -183,6 +195,7 @@ export const spellsQuerySchema = z.object({
     bloodline: z.string().optional(),
     patron: z.string().optional(),
     mystery: z.string().optional(),
+    discipline: z.string().optional(),
     sort: z.enum(["name", "level"]).default("name"),
     ...paginationSchema,
 });
@@ -197,7 +210,7 @@ const app = new Hono<HonoEnv>()
             q,
             level, school, subschool, descriptor,
             class: classParam,
-            domain, subdomain, bloodline, patron, mystery,
+            domain, subdomain, bloodline, patron, mystery, discipline,
             sort, limit, offset,
         } = c.req.valid("query");
 
@@ -214,6 +227,7 @@ const app = new Hono<HonoEnv>()
                 bloodline: parseIds(bloodline),
                 patron: parseIds(patron),
                 mystery: parseIds(mystery),
+                discipline: parseIds(discipline),
             },
         };
 
@@ -278,6 +292,10 @@ const app = new Hono<HonoEnv>()
                 mysterySpells: {
                     with: {mystery: true},
                     orderBy: (ms, {asc: a}) => [a(ms.classLevel)],
+                },
+                disciplineSpells: {
+                    with: {discipline: true},
+                    orderBy: (ds, {asc: a}) => [a(ds.classLevel)],
                 },
             },
         });
@@ -348,6 +366,12 @@ const app = new Hono<HonoEnv>()
                 level: evenClassLevel(ms.classLevel),
                 classLevel: ms.classLevel,
                 note: ms.note,
+            })),
+            disciplines: spell.disciplineSpells.map((ds) => ({
+                ...ds.discipline,
+                level: disciplineLevel(ds.classLevel),
+                classLevel: ds.classLevel,
+                note: ds.note,
             })),
         });
     });

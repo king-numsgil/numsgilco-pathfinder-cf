@@ -29,7 +29,7 @@ interface Ref {
     key: string | null;
 }
 
-// One entry of a domain / bloodline / patron / mystery spell list. `text` is
+// One entry of a domain / bloodline / patron / mystery / discipline spell list. `text` is
 // the entry as printed, e.g. "elemental body IV (air only)"
 interface SpellGroup {
     level: number;
@@ -109,6 +109,12 @@ interface CodexMystery {
     bonusSpells: SpellGroup[];
 }
 
+interface CodexPsychicDiscipline {
+    key: string;
+    name: string;
+    bonusSpells: SpellGroup[];
+}
+
 interface CodexPatron {
     key: string;
     name: string;
@@ -148,6 +154,7 @@ interface Codex {
     bloodlines: CodexBloodline[];
     bloodragerBloodlines: CodexBloodline[];
     mysteries: CodexMystery[];
+    psychicDisciplines: CodexPsychicDiscipline[];
     patrons: CodexPatron[];
     feats: CodexFeat[];
 }
@@ -342,7 +349,8 @@ console.log(
     `  Generated ${codex.generatedAt}: ${codex.spells.length} spells, ${codex.feats.length} feats, ` +
     `${codex.deities.length} deities, ${codex.domains.length} domains, ${codex.subdomains.length} subdomains, ` +
     `${codex.bloodlines.length}+${codex.bloodragerBloodlines.length} bloodlines, ` +
-    `${codex.patrons.length} patrons, ${codex.mysteries.length} mysteries`,
+    `${codex.patrons.length} patrons, ${codex.mysteries.length} mysteries, ` +
+    `${codex.psychicDisciplines.length} psychic disciplines`,
 );
 
 // ─── Build rows ──────────────────────────────────────────────────────────────
@@ -358,6 +366,7 @@ const subdomainIds = new KeyMap("subdomain");
 const bloodlineIds = new KeyMap("bloodline");
 const patronIds = new KeyMap("patron");
 const mysteryIds = new KeyMap("mystery");
+const disciplineIds = new KeyMap("psychic discipline");
 const featIds = new KeyMap("feat");
 
 // Spell IDs first: every spell list refers to them
@@ -475,8 +484,9 @@ for (const subdomain of codex.subdomains) {
     }
 }
 
-// Bloodlines (sorcerer and bloodrager), patrons and mysteries. Their spell
-// lists are keyed by the CLASS level at which each spell is granted.
+// Bloodlines (sorcerer and bloodrager), patrons, mysteries and psychic
+// disciplines. Their spell lists are keyed by the CLASS level at which each
+// spell is granted.
 
 const bloodlineRows: Row<typeof schema.bloodlines>[] = [
     ...codex.bloodlines.map((b) => ({id: bloodlineIds.add(b.key), name: b.name, bloodrager: false})),
@@ -488,11 +498,13 @@ const bloodlineRows: Row<typeof schema.bloodlines>[] = [
 ];
 const patronRows = codex.patrons.map((p) => ({id: patronIds.add(p.key), name: p.name}));
 const mysteryRows = codex.mysteries.map((m) => ({id: mysteryIds.add(m.key), name: m.name}));
+const disciplineRows = codex.psychicDisciplines.map((d) => ({id: disciplineIds.add(d.key), name: d.name}));
 
 const bloodlineSpells = new JunctionRows<Row<typeof schema.bloodlineSpells>>("bloodline_spells");
 const patronSpells = new JunctionRows<Row<typeof schema.patronSpells>>("patron_spells");
 const mysterySpells = new JunctionRows<Row<typeof schema.mysterySpells>>("mystery_spells");
 const mysteryDeities = new JunctionRows<Row<typeof schema.mysteryDeities>>("mystery_deities");
+const disciplineSpells = new JunctionRows<Row<typeof schema.disciplineSpells>>("discipline_spells");
 
 for (const bloodline of [...codex.bloodlines, ...codex.bloodragerBloodlines]) {
     const context = `Bloodline ${bloodline.key}`;
@@ -540,6 +552,23 @@ for (const mystery of codex.mysteries) {
                 mysterySpells.add(
                     [mysteryId, spellId, String(group.level)],
                     {mysteryId, spellId, classLevel: group.level, note},
+                    context,
+                );
+            }
+        }
+    }
+}
+
+for (const discipline of codex.psychicDisciplines) {
+    const context = `Psychic discipline ${discipline.name}`;
+    const disciplineId = disciplineIds.resolve(discipline, context)!;
+    for (const group of discipline.bonusSpells) {
+        for (const {key, note} of expandGroup(group)) {
+            const spellId = spellIds.resolve({name: key, key}, context);
+            if (spellId) {
+                disciplineSpells.add(
+                    [spellId, disciplineId],
+                    {spellId, disciplineId, classLevel: group.level, note},
                     context,
                 );
             }
@@ -647,19 +676,27 @@ for (const feat of codex.feats) {
         minCasterLevel: minValue(feat.prerequisites, "casterLevel"),
     });
 
-    // Feat graph: only hard requirements, not one-of-several alternatives
+    // Feat graph: only hard requirements, not one-of-several alternatives. The
+    // same feat taken twice is one edge with both notes: Thunder and Fang needs
+    // "Weapon Focus (earth breaker, klar)"
+    const notes = new Map<string, string[]>();
     for (const option of requiredOptions(feat.prerequisites)) {
         if (option.type !== "feat" || !option.key) {
             continue;
         }
         const requiredFeatId = featIds.resolve({name: option.text, key: option.key}, context);
         if (requiredFeatId && requiredFeatId !== featId) {
-            featPrerequisites.add(
-                [featId, requiredFeatId],
-                {featId, requiredFeatId, note: featLinkNote(option.detail)},
-                context,
-            );
+            const note = featLinkNote(option.detail);
+            const list = notes.get(requiredFeatId) ?? [];
+            notes.set(requiredFeatId, note && !list.includes(note) ? [...list, note] : list);
         }
+    }
+    for (const [requiredFeatId, list] of notes) {
+        featPrerequisites.add(
+            [featId, requiredFeatId],
+            {featId, requiredFeatId, note: list.join(", ") || null},
+            context,
+        );
     }
 }
 
@@ -679,6 +716,7 @@ const tables: [string, unknown[]][] = [
     ["patrons", patronRows],
     ["mysteries", mysteryRows],
     ["mystery_deities", mysteryDeities.values],
+    ["psychic_disciplines", disciplineRows],
     ["spells", spellRows],
     ["spell_subschools", spellSubschools.values],
     ["spell_classes", spellClasses.values],
@@ -687,6 +725,7 @@ const tables: [string, unknown[]][] = [
     ["bloodline_spells", bloodlineSpells.values],
     ["patron_spells", patronSpells.values],
     ["mystery_spells", mysterySpells.values],
+    ["discipline_spells", disciplineSpells.values],
     ["feats", featRows],
     ["feat_prerequisites", featPrerequisites.values],
 ];
@@ -750,6 +789,7 @@ await db.insert(schema.bloodlines).values(bloodlineRows);
 await db.insert(schema.patrons).values(patronRows);
 await db.insert(schema.mysteries).values(mysteryRows);
 await batchInsert("mystery_deities", mysteryDeities.values, (b) => db.insert(schema.mysteryDeities).values(b));
+await db.insert(schema.psychicDisciplines).values(disciplineRows);
 
 await batchInsert("spells", spellRows, (b) => db.insert(schema.spells).values(b));
 await batchInsert("spell_subschools", spellSubschools.values, (b) => db.insert(schema.spellSubschools).values(b));
@@ -759,6 +799,7 @@ await batchInsert("subdomain_spells", subdomainSpells.values, (b) => db.insert(s
 await batchInsert("bloodline_spells", bloodlineSpells.values, (b) => db.insert(schema.bloodlineSpells).values(b));
 await batchInsert("patron_spells", patronSpells.values, (b) => db.insert(schema.patronSpells).values(b));
 await batchInsert("mystery_spells", mysterySpells.values, (b) => db.insert(schema.mysterySpells).values(b));
+await batchInsert("discipline_spells", disciplineSpells.values, (b) => db.insert(schema.disciplineSpells).values(b));
 
 await batchInsert("feats", featRows, (b) => db.insert(schema.feats).values(b));
 await batchInsert("feat_prerequisites", featPrerequisites.values, (b) => db.insert(schema.featPrerequisites).values(b));

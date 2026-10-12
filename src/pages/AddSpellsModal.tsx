@@ -16,12 +16,14 @@ const castableLevels = (slots: number[]): string | undefined => {
     return slots.flatMap((n, level) => level === 0 || n > 0 ? [level] : []).join(",");
 };
 
-type SourceParams = Partial<Record<"domain" | "subdomain" | "bloodline" | "patron" | "mystery", string>>;
+type SourceParams = Partial<Record<CharacterSource["type"], string>>;
 
 // Comma-separated IDs per source type, as the spell search takes them. A
 // subdomain also brings its domain, whose list it only partly replaces.
 const sourceParams = (sources: CharacterSource[]): SourceParams => {
-    const ids: Record<keyof SourceParams, string[]> = {domain: [], subdomain: [], bloodline: [], patron: [], mystery: []};
+    const ids: Record<keyof SourceParams, string[]> = {
+        domain: [], subdomain: [], bloodline: [], patron: [], mystery: [], discipline: [],
+    };
     for (const src of sources) {
         ids[src.type].push(src.sourceId);
         if (src.domainId) {
@@ -60,21 +62,21 @@ export const AddSpellsModal: FC<AddSpellsModalProps> = ({character, onClose, onA
 
     // The class list plus every source's list (the API ORs them); a subdomain
     // also brings its domain, whose list it only partly replaces
-    const {domain, subdomain, bloodline, patron, mystery} = classOnly ? sourceParams(character.sources) : {};
+    const {domain, subdomain, bloodline, patron, mystery, discipline} = classOnly ? sourceParams(character.sources) : {};
     const classId = classOnly ? character.classId : undefined;
     const level = castableLevels(character.slots);
-    const key = [q, classId, domain, subdomain, bloodline, patron, mystery, level].join("|");
+    const key = [q, classId, domain, subdomain, bloodline, patron, mystery, discipline, level].join("|");
     useEffect(() => {
         fetchSpells({
             q: q || undefined,
             level,
-            class: classId, domain, subdomain, bloodline, patron, mystery,
+            class: classId, domain, subdomain, bloodline, patron, mystery, discipline,
             sort: classId ? "level" : "name",
             limit: String(RESULT_LIMIT),
         })
             .then((res) => setResults({key, spells: res.data, total: res.total}))
             .catch((e: unknown) => setError(e instanceof Error ? e.message : "Search failed"));
-    }, [key, q, classId, domain, subdomain, bloodline, patron, mystery, level]);
+    }, [key, q, classId, domain, subdomain, bloodline, patron, mystery, discipline, level]);
 
     const current = results?.key === key ? results : null;
     const known = new Set(character.spells.map((s) => s.id));

@@ -11,6 +11,7 @@ export type FilterState = {
     bloodlineIds: string[];
     patronIds: string[];
     mysteryIds: string[];
+    disciplineIds: string[];
 };
 
 export const EMPTY_FILTERS: FilterState = {
@@ -24,6 +25,7 @@ export const EMPTY_FILTERS: FilterState = {
     bloodlineIds: [],
     patronIds: [],
     mysteryIds: [],
+    disciplineIds: [],
 };
 
 export type SpellSort = "name" | "level";
@@ -41,6 +43,7 @@ const PARAM_NAMES = {
     bloodlineIds: "bloodline",
     patronIds: "patron",
     mysteryIds: "mystery",
+    disciplineIds: "discipline",
 } as const satisfies Record<keyof FilterState, string>;
 
 const FILTER_KEYS = Object.keys(PARAM_NAMES) as (keyof FilterState)[];
