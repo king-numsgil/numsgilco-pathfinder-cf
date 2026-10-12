@@ -8,6 +8,8 @@
  * The route is the URL path (+ query). Omit its leading slash: Git Bash
  * rewrites arguments starting with "/" into Windows paths.
  *
+ * --cookie=name=value (repeatable) is set before loading, e.g. a session cookie.
+ *
  * Steps run in order: --type, --click, --scroll (each repeatable, applied in the
  * order given per kind). Before the screenshot, the page is given time to settle:
  * no Mantine loaders visible and no layout shift for a few frames.
@@ -36,6 +38,8 @@ const {values, positionals} = parseArgs({
         click: {type: "string", multiple: true, default: []},
         scroll: {type: "string", multiple: true, default: []},
         eval: {type: "string", multiple: true, default: []},
+        // name=value, e.g. a better-auth.session_token to view signed-in pages
+        cookie: {type: "string", multiple: true, default: []},
         dpr: {type: "string", default: "1"},
         full: {type: "boolean", default: false},
         timeout: {type: "string", default: "15000"},
@@ -92,6 +96,16 @@ await view.cdp("Emulation.setDeviceMetricsOverride", {
 });
 if (width < 768) {
     await view.cdp("Emulation.setTouchEmulationEnabled", {enabled: true, maxTouchPoints: 5});
+}
+
+for (const cookie of values.cookie) {
+    const at = cookie.indexOf("=");
+    await view.cdp("Network.setCookie", {
+        name: cookie.slice(0, at),
+        value: cookie.slice(at + 1),
+        url: values.base,
+        httpOnly: true,
+    });
 }
 
 await view.navigate(`${values.base}${route.startsWith("/") ? route : `/${route}`}`);

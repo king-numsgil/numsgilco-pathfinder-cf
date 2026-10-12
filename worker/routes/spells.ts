@@ -24,11 +24,11 @@ const bloodlineSpellLevel = sql`CASE
     ELSE (${s.bloodlineSpells.classLevel} - 1) / 2
 END`;
 
-function bloodlineLevel(bloodrager: boolean, classLevel: number): number {
+export function bloodlineLevel(bloodrager: boolean, classLevel: number): number {
     return bloodrager ? (classLevel - 4) / 3 : (classLevel - 1) / 2;
 }
 
-function evenClassLevel(classLevel: number): number {
+export function evenClassLevel(classLevel: number): number {
     return classLevel / 2;
 }
 

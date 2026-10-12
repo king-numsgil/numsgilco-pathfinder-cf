@@ -23,9 +23,11 @@ function listNamed(connectionString: string, table: NamedTable): Promise<{ id: s
 const CACHE_CONTROL = "public, max-age=3600";
 
 const app = new Hono<HonoEnv>()
+    // Mounted at /api, so this wraps every API route: keep a route's own policy
+    // (per-user routes send private, no-store)
     .use(async (c, next) => {
         await next();
-        if (c.res.ok) {
+        if (c.res.ok && !c.res.headers.has("Cache-Control")) {
             c.header("Cache-Control", CACHE_CONTROL);
         }
     })

@@ -3,5 +3,8 @@
 // this subset is enough for TypeScript to type-check the hc<AppType> call.
 interface Env {
     HYPERDRIVE: { connectionString: string };
-    CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE: string;
+    BETTER_AUTH_URL: string;
+    BETTER_AUTH_SECRET: string;
+    DISCORD_CLIENT_ID: string;
+    DISCORD_CLIENT_SECRET: string;
 }

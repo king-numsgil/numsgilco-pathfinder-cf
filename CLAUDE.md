@@ -29,8 +29,9 @@ A Cloudflare Worker serves both the Hono JSON API (`/api/*`) and the Vite-built 
 
 ```
 vite.config.ts         — Vite + cloudflare() + vanillaExtractPlugin() + react()
-worker/index.ts        — Hono app; mounts /api (lookups), /api/spells, /api/feats; JSON onError; exports AppType
-worker/routes/         — lookups.ts (lists + /stats), spells.ts, feats.ts (search + detail), params.ts (shared parsing)
+worker/index.ts        — Hono app; mounts /api/auth/*, /api (lookups), /api/spells, /api/feats, /api/characters; JSON onError; exports AppType
+worker/auth.ts         — Better Auth (Discord) factory + requireUser middleware
+worker/routes/         — lookups.ts (lists + /stats), spells.ts, feats.ts (search + detail), characters.ts (spellbooks), params.ts (shared parsing)
 worker/db/schema.ts    — Drizzle schema (single source of truth)
 worker/db/index.ts     — createDb(connectionString) factory
 src/api/index.ts       — Typed Hono client (hc<AppType>), all fetch helpers + derived types
@@ -61,6 +62,18 @@ drizzle.config.ts      — Reads .env for DB URL; used by drizzle-kit commands
 - Filter parameters accept **comma-separated IDs** (e.g. `school=id1,id2`), split by `parseIds()` / `parseLevels()` in `params.ts`. `limit`/`offset` are coerced and clamped by `paginationSchema` (bad values → 400). Name search escapes LIKE wildcards (`escapeLike()`).
 - Lookup routes send `Cache-Control: public, max-age=3600`; the SPA also caches them in memory (`once()` in `src/api/index.ts`).
 - `GET /api/domains` returns `{ id, name, subdomains: [] }` — the subdomain nesting is built at query time from `domainSubdomains`.
+- The lookups router's `Cache-Control: public` middleware is mounted at `/api` and so wraps **every** API route; it only fills in the header when a route didn't set one.
+
+### Auth & spellbooks
+
+- **Better Auth** (`better-auth/minimal` + Drizzle adapter), Discord sign-in only. `createAuth(env, db)` is built per request because the DB comes from the Hyperdrive binding. Tables: `users`, `sessions`, `accounts`, `verifications` (ULID ids via `advanced.database.generateId`). Session cookie cache is on (5 min).
+- Required secrets are declared in `wrangler.jsonc` (`secrets.required`): `BETTER_AUTH_URL` (the public origin), `BETTER_AUTH_SECRET`, `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET`. Locally they go in `.env`; in production `wrangler secret put`. Discord redirect: `<origin>/api/auth/callback/discord`.
+- `/api/characters/*` uses `requireUser` (401 when signed out; sets `c.var.db`, `c.var.user`, and `Cache-Control: private, no-store`). Every query filters by the owner's user ID. Mutations return the full character detail.
+- A character = one casting class. `slots[n]`/`slotsUsed[n]` (n = spell level 0–9) are entered by the player; `character_spells` = spells known / spellbook (with the level cast at); `prepared_spells` = one row per prepared slot with a `cast` flag. Rest resets `cast` and `slotsUsed`.
+- `character_sources`: any number of domains / subdomains / bloodlines / patrons / mysteries per character, any class (archetypes). Polymorphic `type` + `sourceId`, validated on write; a subdomain also stores the `domainId` it was taken from. Sent as the full `sources` list on POST/PATCH (PATCH replaces). Logic in `worker/routes/characterSources.ts`.
+- `GET /api/characters/:id/granted` computes spells the sources grant now: domain/subdomain spells up to the highest spell level with slots (all if none set), bloodline/patron/mystery spells whose class level ≤ the character's level. A subdomain = its domain's list with its replacement spells swapped in at their levels. Computed, never stored.
+- **`db:seed` wipes spellbooks**: it truncates every schema table except `users`, `sessions`, `accounts`, `verifications` (the list is derived from the schema), and IDs are regenerated.
+- SPA: `src/api/auth.ts` (`authClient.useSession()`, `signInWithDiscord()`), pages `Characters.tsx` (`/characters`) and `Spellbook.tsx` (`/characters/:id`, `?tab=book`), `AddToSpellbook` in the spell modal.
 
 ### Frontend
 
@@ -101,7 +114,7 @@ TypeScript is pinned to 6.x because typescript-eslint does not support TS 7 yet.
 - **clipped** — containers whose content is wider than they are (expected for the list tables on mobile; anything else is usually a bug)
 - **console** — page errors/warnings
 
-Options: `--device=mobile|tablet|desktop` (390×844 / 820×1180 / 1440×900) or `--size=WxH`, `--click=<selector>`, `--type=<text>`, `--scroll=<selector>`, `--eval=<expression>`, `--full`, `--dpr=2`, `--out=<file>`. Pass the route **without** a leading slash (`spells/<id>`): Git Bash rewrites `/…` arguments into Windows paths. Mobile sizes use DevTools device emulation because headless Chrome won't go below 500px wide.
+Options: `--device=mobile|tablet|desktop` (390×844 / 820×1180 / 1440×900) or `--size=WxH`, `--cookie=name=value` (e.g. a `better-auth.session_token` for signed-in pages), `--click=<selector>`, `--type=<text>`, `--scroll=<selector>`, `--eval=<expression>`, `--full`, `--dpr=2`, `--out=<file>`. Pass the route **without** a leading slash (`spells/<id>`): Git Bash rewrites `/…` arguments into Windows paths. Mobile sizes use DevTools device emulation because headless Chrome won't go below 500px wide.
 
 Use it to check UI changes on both mobile and desktop before calling them done; read the screenshots.
 

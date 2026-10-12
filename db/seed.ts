@@ -14,7 +14,8 @@
  * no separate DATABASE_URL env var is needed.
  */
 
-import { sql } from "drizzle-orm";
+import { getTableName, is, sql } from "drizzle-orm";
+import { PgTable } from "drizzle-orm/pg-core";
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 import { ulid } from "ulidx";
@@ -719,18 +720,17 @@ const isLocal = /@(localhost|127\.0\.0\.1)[:/]/.test(url);
 const client = postgres(url, {max: 3, ssl: isLocal ? false : "require", onnotice: () => {}});
 const db = drizzle(client, {schema});
 
-console.log("\nTruncating existing data...");
+// Every table in the schema except sign-in data, so a new table can't be missed.
+// Characters and spellbooks reference the regenerated IDs, so they go too.
+const KEEP = new Set(["users", "sessions", "accounts", "verifications"]);
+const truncated = Object.values(schema as Record<string, unknown>)
+    .filter((t): t is PgTable => is(t, PgTable))
+    .map((t) => getTableName(t))
+    .filter((name) => !KEEP.has(name));
+
+console.log(`\nTruncating ${truncated.length} tables (keeping ${[...KEEP].join(", ")})...`);
 await db.execute(sql`
-    TRUNCATE TABLE
-        mystery_spells, mystery_deities, mysteries,
-        patron_spells, patrons,
-        bloodline_spells, bloodlines,
-        subdomain_spells, domain_spells,
-        subdomain_deities, domain_deities,
-        domain_subdomains, subdomains, domains,
-        spell_classes, spell_subschools, spells,
-        deities, subschools, schools, classes,
-        feat_prerequisites, feats
+    TRUNCATE TABLE ${sql.join(truncated.map((name) => sql.identifier(name)), sql`, `)}
     RESTART IDENTITY CASCADE
 `);
 

@@ -2,6 +2,7 @@ import { Badge, Center, Divider, Group, Loader, Modal, SimpleGrid, Stack, Text }
 import { type FC, Fragment, useState } from "react";
 import { useParams } from "react-router-dom";
 import { fetchSpell, type SpellDetail } from "../api";
+import { AddToSpellbook } from "./AddToSpellbook";
 import { useDetailModalLayout } from "./detailModal";
 import { useCloseModal } from "./listNavigation";
 import { Prose } from "./Prose";
@@ -105,6 +106,9 @@ const SpellContent: FC<SpellContentProps> = ({spell}) => {
             {spell.deity && (
                 <Badge variant="light" color="yellow" size="sm">{spell.deity.name}</Badge>
             )}
+            <Group gap="xs" ml="auto">
+                <AddToSpellbook spell={spell}/>
+            </Group>
         </Group>
 
         {/* Casting stats */}

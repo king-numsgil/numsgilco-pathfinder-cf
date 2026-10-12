@@ -39,6 +39,18 @@
      * https://developers.cloudflare.com/workers/configuration/secrets/
      */
     // "vars": {  "MY_VARIABLE": "production_value" }
+    // Locally from .env; in production `wrangler secret put <NAME>`
+    "secrets": {
+        "required": [
+            // Public origin, e.g. http://localhost:5173 locally
+            "BETTER_AUTH_URL",
+            // Random 32+ characters: signs session cookies
+            "BETTER_AUTH_SECRET",
+            // Discord application (OAuth2 redirect: <origin>/api/auth/callback/discord)
+            "DISCORD_CLIENT_ID",
+            "DISCORD_CLIENT_SECRET"
+        ]
+    },
     /**
      * Service Bindings (communicate between multiple Workers)
      * https://developers.cloudflare.com/workers/wrangler/configuration/#service-bindings

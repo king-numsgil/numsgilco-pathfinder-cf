@@ -2,9 +2,10 @@ import { AppShell, Burger, Group, NavLink, ScrollArea, Text } from "@mantine/cor
 import { useDisclosure } from "@mantine/hooks";
 import type { FC } from "react";
 import { type IconType } from "react-icons";
-import { GiCompass, GiCrossedSwords, GiSpellBook } from "react-icons/gi";
+import { GiBookmarklet, GiCompass, GiCrossedSwords, GiSpellBook } from "react-icons/gi";
 import { NavLink as RouterNavLink, Outlet, useLocation } from "react-router-dom";
 import * as classes from "./Shell.css";
+import { UserMenu } from "./UserMenu";
 
 interface NavItem {
     label: string;
@@ -16,6 +17,7 @@ const navItems: NavItem[] = [
     {label: "Home", to: "/", icon: GiCompass},
     {label: "Spells", to: "/spells", icon: GiSpellBook},
     {label: "Feats", to: "/feats", icon: GiCrossedSwords},
+    {label: "Spellbooks", to: "/characters", icon: GiBookmarklet},
 ];
 
 export const Shell: FC = () => {
@@ -36,6 +38,9 @@ export const Shell: FC = () => {
                 <Text className={classes.brand} fw={700} size="xl">
                     Pathfinder
                 </Text>
+                <Group ml="auto">
+                    <UserMenu/>
+                </Group>
             </Group>
         </AppShell.Header>
 
